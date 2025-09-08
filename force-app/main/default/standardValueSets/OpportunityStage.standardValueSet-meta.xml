@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<StandardValueSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <standardValue>
+        <fullName>Prospección</fullName>
+        <label>Prospección</label>
+    <description>Identificación y calificación inicial del prospecto. Se valida interés y encaje básico. Usada en Créditos Personales (no aplica a Tarjetas).</description>
+        <default>true</default>
+        <closed>false</closed>
+        <won>false</won>
+        <probability>10</probability>
+        <forecastCategory>Pipeline</forecastCategory>
+    </standardValue>
+    <standardValue>
+        <fullName>Contacto Inicial</fullName>
+        <label>Contacto Inicial</label>
+    <description>Primer acercamiento con el cliente para confirmar interés y recolectar datos mínimos. Aplica a Tarjetas y Créditos Personales.</description>
+        <closed>false</closed>
+        <won>false</won>
+        <probability>20</probability>
+        <forecastCategory>Pipeline</forecastCategory>
+    </standardValue>
+    <standardValue>
+        <fullName>Falta Información</fullName>
+        <label>Falta Información</label>
+    <description>Se solicitó información o documentos adicionales al cliente. La oportunidad permanece abierta hasta completar requisitos.</description>
+        <closed>false</closed>
+        <won>false</won>
+        <probability>40</probability>
+        <forecastCategory>Pipeline</forecastCategory>
+    </standardValue>
+    <standardValue>
+        <fullName>Evaluación Crediticia</fullName>
+        <label>Evaluación Crediticia</label>
+    <description>Análisis y decisión crediticia: buró, ingresos, capacidad de pago y políticas. Aplica a ambos procesos.</description>
+        <closed>false</closed>
+        <won>false</won>
+        <probability>60</probability>
+        <forecastCategory>Pipeline</forecastCategory>
+    </standardValue>
+    <standardValue>
+        <fullName>Oferta Presentada</fullName>
+        <label>Oferta Presentada</label>
+    <description>Se comparte propuesta formal (monto, tasa, plazo/condiciones). Etapa utilizada en Créditos Personales; normalmente no aplica en Tarjetas.</description>
+        <closed>false</closed>
+        <won>false</won>
+        <probability>70</probability>
+    <forecastCategory>Pipeline</forecastCategory>
+    </standardValue>
+    <standardValue>
+        <fullName>Oferta Aceptada</fullName>
+        <label>Oferta Aceptada</label>
+    <description>El cliente acepta la oferta y términos. Se prepara la formalización. Aplica a Créditos Personales.</description>
+        <closed>false</closed>
+        <won>false</won>
+        <probability>80</probability>
+        <forecastCategory>Pipeline</forecastCategory>
+    </standardValue>
+    <standardValue>
+        <fullName>Formalización</fullName>
+        <label>Formalización</label>
+    <description>Gestión de contratos, KYC, firmas y validaciones legales previas al desembolso. Aplica a Créditos Personales.</description>
+        <closed>false</closed>
+        <won>false</won>
+        <probability>90</probability>
+        <forecastCategory>Pipeline</forecastCategory>
+    </standardValue>
+    <standardValue>
+        <fullName>Depositado</fullName>
+        <label>Depositado</label>
+    <description>Desembolso realizado y fondos disponibles. Marca cierre ganado en Créditos Personales; no aplica a Tarjetas.</description>
+        <closed>true</closed>
+        <won>true</won>
+        <probability>100</probability>
+        <forecastCategory>Closed</forecastCategory>
+    </standardValue>
+    <standardValue>
+        <fullName>Aprobada</fullName>
+        <label>Aprobada</label>
+    <description>Decisión final aprobatoria. Cierre ganado en Tarjetas; en Créditos Personales es aprobación previa al desembolso.</description>
+        <closed>true</closed>
+        <won>true</won>
+        <probability>100</probability>
+        <forecastCategory>Closed</forecastCategory>
+    </standardValue>
+    <standardValue>
+        <fullName>Rechazada</fullName>
+        <label>Rechazada</label>
+    <description>No cumple políticas o resultado crediticio negativo. Cierra como perdida.</description>
+        <closed>true</closed>
+        <won>false</won>
+        <probability>0</probability>
+        <forecastCategory>Omitted</forecastCategory>
+    </standardValue>
+</StandardValueSet>
