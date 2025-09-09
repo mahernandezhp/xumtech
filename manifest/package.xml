@@ -2,7 +2,12 @@
 <Package xmlns="http://soap.sforce.com/2006/04/metadata">
 	<types>
 		<members>*</members>
-		<name>ApexClass</name>
+		<name>ApprovalProcess</name>
+	</types>
+	<types>
+		<members>Opportunity</members>
+		<members>XUM_Card__c</members>
+		<name>CustomObject</name>
 	</types>
 	<types>
 		<members>*</members>

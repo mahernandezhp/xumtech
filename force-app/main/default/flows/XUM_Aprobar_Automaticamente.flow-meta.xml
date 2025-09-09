@@ -5,7 +5,7 @@
         <label>Autoprobación Automatica</label>
         <locationX>0</locationX>
         <locationY>0</locationY>
-        <actionName>XUM_AutoApproveMaxLimitAmount</actionName>
+        <actionName>XuM_AutoApproveMaxLimitAmount</actionName>
         <actionType>apex</actionType>
         <connector>
             <targetReference>Get_Custom_Notification</targetReference>
@@ -17,7 +17,7 @@
                 <elementReference>OpportunityId</elementReference>
             </value>
         </inputParameters>
-        <nameSegment>XUM_AutoApproveMaxLimitAmount</nameSegment>
+        <nameSegment>XuM_AutoApproveMaxLimitAmount</nameSegment>
         <offset>0</offset>
         <storeOutputAutomatically>true</storeOutputAutomatically>
     </actionCalls>

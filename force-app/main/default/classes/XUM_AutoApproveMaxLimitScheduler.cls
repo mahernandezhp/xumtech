@@ -1,11 +1,11 @@
-// Schedulable class to invoke XUM_AutoApproveMaxLimitAmount logic every minute.
+// Schedulable class to invoke XUM_AutoApproveMaxLimitAmountQueueable logic every minute.
 // NOTE: Scheduling every minute can consume significant scheduled job resources; ensure this is acceptable for your org limits.
 global without sharing class XUM_AutoApproveMaxLimitScheduler implements Schedulable {
 
     // Executes on schedule, processes items, and reschedules itself to run again in one minute.
     global void execute(SchedulableContext sc) {
 
-        DateTime cutoff = System.now().addMinutes(-3); // 3 minutes ago (adjust value as needed for production)
+        DateTime cutoff = System.now().addMinutes(-1); // 3 minutes ago (adjust value as needed for production)
 
         // Query pending approval work items
         List<ProcessInstanceWorkitem> wis = [
@@ -25,13 +25,8 @@ global without sharing class XUM_AutoApproveMaxLimitScheduler implements Schedul
                 oppIds.add(w.ProcessInstance.TargetObjectId);
             }
 
-            List<XUM_AutoApproveMaxLimitAmount.Inputs> inputs = new List<XUM_AutoApproveMaxLimitAmount.Inputs>();
-            for (Id oppId : oppIds) {
-                XUM_AutoApproveMaxLimitAmount.Inputs inObj = new XUM_AutoApproveMaxLimitAmount.Inputs();
-                inObj.recordId = oppId;
-                inputs.add(inObj);
-            }
-            XUM_AutoApproveMaxLimitAmount.run(inputs);
+            // Use the Queueable class to process the records
+            System.enqueueJob(new XUM_AutoApproveMaxLimitAmountQueueable(new List<Id>(oppIds)));
         }
 
     }

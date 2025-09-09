@@ -10,6 +10,7 @@
         <field>Owner</field>
         <field>XUM_CardLast4Digits__c</field>
         <field>XUM_MaxLimitAmount__c</field>
+        <field>XUM_ApprovalStatus__c</field>
     </approvalPageFields>
     <approvalStep>
         <allowDelegate>false</allowDelegate>
@@ -42,16 +43,12 @@
             <value>Tarjetas</value>
         </criteriaItems>
         <criteriaItems>
-            <field>Opportunity.XUM_CardLast4Digits__c</field>
-            <operation>notEqual</operation>
-        </criteriaItems>
-        <criteriaItems>
             <field>Opportunity.XUM_ApprovalStatus__c</field>
-            <operation>equals</operation>
-            <value>No Enviada</value>
+            <operation>notEqual</operation>
+            <value>Pendiente</value>
         </criteriaItems>
     </entryCriteria>
-    <finalApprovalRecordLock>true</finalApprovalRecordLock>
+    <finalApprovalRecordLock>false</finalApprovalRecordLock>
     <finalRejectionActions>
         <action>
             <name>Rechazado_Director</name>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ValidationRule xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>XUM_MaxLimitAmount</fullName>
+    <active>true</active>
+    <errorConditionFormula>AND(
+  $RecordType.Name = &quot;Tarjetas&quot;,
+  XUM_MaxLimitAmount__c &gt; 10000,
+  OR(
+    ISBLANK(TRIM(XUM_CardLast4Digits__c)),
+    NOT(REGEX(XUM_CardLast4Digits__c, &quot;^[0-9]{4}$&quot;))
+  )
+)</errorConditionFormula>
+    <errorDisplayField>XUM_CardLast4Digits__c</errorDisplayField>
+    <errorMessage>Favor de capturar los ultimo 4 digitos de la tarjeta</errorMessage>
+</ValidationRule>

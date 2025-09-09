@@ -6,59 +6,87 @@ public class XUM_AutoApproveMaxLimitAmountQueueable implements Queueable {
     }
 
     public void execute(QueueableContext context) {
-        List<XUM_AutoApproveMaxLimitAmount.Results> out = new List<XUM_AutoApproveMaxLimitAmount.Results>();
-
         if (recordIds == null || recordIds.isEmpty()) {
             return;
         }
 
+        // Consolidate SOQL query to fetch Opportunities
         Map<Id, Opportunity> opps = new Map<Id, Opportunity>([
             SELECT Id
             FROM Opportunity
             WHERE Id IN :recordIds
         ]);
 
+        // Consolidate SOQL query to fetch ProcessInstanceWorkitems
+        Map<Id, ProcessInstanceWorkitem> workitemMap = new Map<Id, ProcessInstanceWorkitem>();
+        for (ProcessInstanceWorkitem wi : [
+            SELECT Id, ProcessInstance.Status, ProcessInstance.TargetObjectId
+            FROM ProcessInstanceWorkitem
+            WHERE ProcessInstance.TargetObjectId IN :recordIds
+            ORDER BY CreatedDate DESC
+        ]) {
+            if (!workitemMap.containsKey(wi.ProcessInstance.TargetObjectId)) {
+                workitemMap.put(wi.ProcessInstance.TargetObjectId, wi);
+            }
+        }
+
+        List<Approval.ProcessWorkitemRequest> requests = new List<Approval.ProcessWorkitemRequest>();
+        List<Id> unlockIds = new List<Id>();
+        List<XUM_AutoApproveMaxLimitAmount.Results> results = new List<XUM_AutoApproveMaxLimitAmount.Results>();
+
         for (Id recordId : recordIds) {
-            XUM_AutoApproveMaxLimitAmount.Results r = new XUM_AutoApproveMaxLimitAmount.Results();
+            XUM_AutoApproveMaxLimitAmount.Results result = new XUM_AutoApproveMaxLimitAmount.Results();
             try {
                 Opportunity opp = opps.get(recordId);
-                if (opp == null) { r.approved = false; r.message = 'Opp no encontrada'; out.add(r); continue; }
+                if (opp == null) {
+                    result.approved = false;
+                    result.message = 'Opp no encontrada';
+                    results.add(result);
+                    continue;
+                }
 
-                List<ProcessInstanceWorkitem> wis = [
-                    SELECT Id, ProcessInstance.Status
-                    FROM ProcessInstanceWorkitem
-                    WHERE ProcessInstance.TargetObjectId = :recordId
-                    ORDER BY CreatedDate DESC
-                    LIMIT 1
-                ];
-
-                if (wis.isEmpty() || wis[0].ProcessInstance.Status != 'Pending') {
-                    r.approved = false; r.message = 'Sin aprobación pendiente.'; out.add(r); continue;
+                ProcessInstanceWorkitem workitem = workitemMap.get(recordId);
+                if (workitem == null || workitem.ProcessInstance.Status != 'Pending') {
+                    result.approved = false;
+                    result.message = 'Sin aprobación pendiente.';
+                    results.add(result);
+                    continue;
                 }
 
                 Approval.ProcessWorkitemRequest req = new Approval.ProcessWorkitemRequest();
-                req.setWorkitemId(wis[0].Id);
+                req.setWorkitemId(workitem.Id);
                 req.setAction('Approve');
                 req.setComments('La solicitud ha sido aprobada automaticamente');
-                Approval.ProcessResult res = Approval.process(req);
+                requests.add(req);
+                unlockIds.add(recordId);
 
-                if (res.isSuccess()) {
-                    Approval.UnlockResult unlockRes = Approval.unlock(recordId);
-                    if (unlockRes.isSuccess()) {
-                        r.approved = true;
-                        r.message = 'Aprobado y desbloqueado: ' + res.getInstanceStatus();
-                    } else {
-                        r.approved = false;
-                        r.message = 'Aprobado pero no se pudo desbloquear: ' + unlockRes.getErrors()[0].getMessage();
-                    }
-                } else {
-                    r.approved = false;
-                    r.message = res.getInstanceStatus();
-                }
+                result.approved = true;
+                result.message = 'Aprobado y desbloqueado';
             } catch (Exception e) {
-                r.approved = false; r.message = e.getMessage();
+                result.approved = false;
+                result.message = e.getMessage();
             }
-            out.add(r);
+            results.add(result);
+        }
+
+        // Process approvals in bulk
+        if (!requests.isEmpty()) {
+            List<Approval.ProcessResult> processResults = Approval.process(requests);
+            for (Approval.ProcessResult processResult : processResults) {
+                if (!processResult.isSuccess()) {
+                    // Log or handle individual approval errors
+                }
+            }
+        }
+
+        // Unlock records in bulk
+        if (!unlockIds.isEmpty()) {
+            List<Approval.UnlockResult> unlockResults = Approval.unlock(unlockIds);
+            for (Approval.UnlockResult unlockResult : unlockResults) {
+                if (!unlockResult.isSuccess()) {
+                    // Log or handle individual unlock errors
+                }
+            }
         }
     }
 }

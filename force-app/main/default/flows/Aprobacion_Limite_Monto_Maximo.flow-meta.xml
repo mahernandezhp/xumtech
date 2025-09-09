@@ -5,7 +5,7 @@
         <label>Approve Automatically</label>
         <locationX>0</locationX>
         <locationY>0</locationY>
-        <actionName>XUM_AutoApproveMaxLimitAmount</actionName>
+        <actionName>XuM_AutoApproveMaxLimitAmount</actionName>
         <actionType>apex</actionType>
         <flowTransactionModel>CurrentTransaction</flowTransactionModel>
         <inputParameters>
@@ -14,7 +14,7 @@
                 <elementReference>$Record.Id</elementReference>
             </value>
         </inputParameters>
-        <nameSegment>XUM_AutoApproveMaxLimitAmount</nameSegment>
+        <nameSegment>XuM_AutoApproveMaxLimitAmount</nameSegment>
         <offset>0</offset>
         <storeOutputAutomatically>true</storeOutputAutomatically>
     </actionCalls>
