@@ -10,6 +10,12 @@
  * =============================================================================
  * 1.0     | 2025-10-17 | Sistema | Creación inicial - Procesador de emails con
  *         |            |         | manejo de límites y generación de CSV
+ * 1.1     | 2025-10-17 | Sistema | Refactoring: Uso de VEC_LeadQueries para
+ *         |            |         | centralizar consultas SOQL
+ * 1.2     | 2025-10-17 | Sistema | Separación: Uso de VEC_UserQueries y 
+ *         |            |         | VEC_SystemQueries según responsabilidades
+ * 1.3     | 2025-10-17 | Sistema | Especialización: Uso de clases específicas por
+ *         |            |         | objeto (EmailTemplate, OrgWideEmailAddress)
  * =============================================================================
  */
 public class VEC_ProspectActivityEmailProcessor implements Queueable {
@@ -22,12 +28,20 @@ public class VEC_ProspectActivityEmailProcessor implements Queueable {
     private Integer currentIndex;
     private Integer emailsSent;
     
+    // Instancias de consultas especializadas
+    private VEC_EmailTemplateQueries emailTemplateQueries;
+    private VEC_OrgWideEmailAddressQueries orgWideEmailQueries;
+    
     /**
      * @description Constructor
      */
     public VEC_ProspectActivityEmailProcessor() {
         this.currentIndex = 0;
         this.emailsSent = 0;
+        
+        // Inicializar instancias de consultas especializadas
+        this.emailTemplateQueries = new VEC_EmailTemplateQueries();
+        this.orgWideEmailQueries = new VEC_OrgWideEmailAddressQueries();
     }
     
     /**
@@ -96,23 +110,22 @@ public class VEC_ProspectActivityEmailProcessor implements Queueable {
      */
     private Messaging.SingleEmailMessage createManagerNotificationEmail(Id managerId, List<User> inactiveAdvisors) {
         try {
-            // Obtener datos del manager
-            User manager = [
-                SELECT Id, Name, Email 
-                FROM User 
-                WHERE Id = :managerId 
-                LIMIT 1
-            ];
+            // Obtener datos del manager usando consulta centralizada de usuarios
+            User manager = userQueries.getManagerById(managerId);
+            if (manager == null) {
+                System.debug(LoggingLevel.WARN, 'VEC_ProspectActivityEmailProcessor: Manager no encontrado: ' + managerId);
+                return null;
+            }
             
-            // Obtener Email Template
-            EmailTemplate template = getEmailTemplate();
+            // Obtener Email Template usando consulta centralizada del sistema
+            EmailTemplate template = emailTemplateQueries.getProspectActivityEmailTemplate();
             if (template == null) {
                 System.debug(LoggingLevel.WARN, 'VEC_ProspectActivityEmailProcessor: Email template no encontrado');
                 return null;
             }
             
-            // Obtener OrgWideEmailAddress
-            OrgWideEmailAddress orgEmail = getOrgWideEmailAddress();
+            // Obtener OrgWideEmailAddress usando consulta centralizada del sistema
+            OrgWideEmailAddress orgEmail = orgWideEmailQueries.getOrgWideEmailAddress();
             
             // Crear email
             Messaging.SingleEmailMessage email = new Messaging.SingleEmailMessage();
@@ -177,41 +190,7 @@ public class VEC_ProspectActivityEmailProcessor implements Queueable {
         }
     }
     
-    /**
-     * @description Obtiene el Email Template para notificaciones
-     * @return EmailTemplate Template configurado
-     */
-    private EmailTemplate getEmailTemplate() {
-        try {
-            return [
-                SELECT Id, Name, Subject, Body, HtmlValue
-                FROM EmailTemplate 
-                WHERE DeveloperName = 'VEC_Manager_Prospect_Activity_Alert'
-                LIMIT 1
-            ];
-        } catch (Exception e) {
-            System.debug(LoggingLevel.WARN, 'VEC_ProspectActivityEmailProcessor: Template no encontrado: ' + e.getMessage());
-            return null;
-        }
-    }
-    
-    /**
-     * @description Obtiene OrgWideEmailAddress para envíos
-     * @return OrgWideEmailAddress Dirección organizacional
-     */
-    private OrgWideEmailAddress getOrgWideEmailAddress() {
-        try {
-            return [
-                SELECT Id, Address, DisplayName
-                FROM OrgWideEmailAddress 
-                WHERE IsAllowAllProfiles = true
-                LIMIT 1
-            ];
-        } catch (Exception e) {
-            System.debug(LoggingLevel.WARN, 'VEC_ProspectActivityEmailProcessor: OrgWideEmail no encontrado: ' + e.getMessage());
-            return null;
-        }
-    }
+    // Métodos removidos - ahora se usan las consultas centralizadas de VEC_LeadQueries
     
     /**
      * @description Procesa resultados del envío de emails

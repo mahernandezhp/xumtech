@@ -12,6 +12,10 @@
  *         |            |         | sin actividad y generar notificaciones a managers
  * 1.1     | 2025-10-17 | Sistema | Ajustes: Solo Leads, RecordType "Empresas U4O",
  *         |            |         | No convertidos, Lote de 50 registros
+ * 1.2     | 2025-10-17 | Sistema | Refactoring: Uso de VEC_LeadQueries para
+ *         |            |         | centralizar consultas SOQL
+ * 1.3     | 2025-10-17 | Sistema | Separación: Uso de VEC_UserQueries, VEC_LeadQueries
+ *         |            |         | y VEC_SystemQueries según responsabilidades
  * =============================================================================
  */
 public class VEC_ProspectActivityBatch implements Database.Batchable<sObject>, Database.Stateful {
@@ -22,6 +26,9 @@ public class VEC_ProspectActivityBatch implements Database.Batchable<sObject>, D
     private Integer emailsSent;
     private List<String> errorLog;
     
+    // Instancias de consultas
+    private VEC_LeadQueries leadQueries;
+    
     /**
      * @description Constructor del batch
      */
@@ -30,6 +37,7 @@ public class VEC_ProspectActivityBatch implements Database.Batchable<sObject>, D
         this.processedManagers = new Set<String>();
         this.emailsSent = 0;
         this.errorLog = new List<String>();
+        this.leadQueries = new VEC_LeadQueries();
     }
     
     /**
@@ -40,18 +48,19 @@ public class VEC_ProspectActivityBatch implements Database.Batchable<sObject>, D
     public Database.QueryLocator start(Database.BatchableContext bc) {
         System.debug('VEC_ProspectActivityBatch: Iniciando batch de verificación de actividad');
         
-        return Database.getQueryLocator([
-            SELECT Id, Name, Email, ManagerId, Manager.Name, Manager.Email, Profile.Name
-            FROM User 
-            WHERE IsActive = true
-            AND Profile.Name = 'VEC Asesor U4O'
-            AND Email != null
-            AND (NOT Email LIKE '%.invalid')
-            AND ManagerId != null
-            AND Manager.IsActive = true
-            AND Manager.Profile.Name = 'Gerente U4O'
-            AND (NOT Manager.Email LIKE '%.invalid')
-        ]);
+        // Usar consulta centralizada para obtener asesores activos
+        String query = 'SELECT Id, Name, Email, ManagerId, Manager.Name, Manager.Email, Profile.Name ' +
+                      'FROM User ' +
+                      'WHERE IsActive = true ' +
+                      'AND Profile.Name = \'VEC Asesor U4O\' ' +
+                      'AND Email != null ' +
+                      'AND (NOT Email LIKE \'%.invalid\') ' +
+                      'AND ManagerId != null ' +
+                      'AND Manager.IsActive = true ' +
+                      'AND Manager.Profile.Name = \'Gerente U4O\' ' +
+                      'AND (NOT Manager.Email LIKE \'%.invalid\')';
+        
+        return Database.getQueryLocator(query);
     }
     
     /**
@@ -125,15 +134,11 @@ public class VEC_ProspectActivityBatch implements Database.Batchable<sObject>, D
     private Set<Id> getAdvisorsWithRecentActivity(Set<Id> advisorIds, Date fromDate) {
         Set<Id> activeAdvisors = new Set<Id>();
         
-        // Buscar Leads creados manualmente (CreatedById = OwnerId) con RecordType "Empresas U4O" y no convertidos
-        for (Lead lead : [
-            SELECT CreatedById, OwnerId, RecordType.DeveloperName, IsConverted
-            FROM Lead
-            WHERE CreatedById IN :advisorIds
-            AND CreatedDate >= :fromDate
-            AND IsConverted = false
-            AND RecordType.DeveloperName = 'Empresas_U4O'
-        ]) {
+        // Usar consulta centralizada para obtener Leads manuales
+        List<Lead> recentLeads = leadQueries.getManualLeadsByAdvisors(advisorIds, fromDate);
+        
+        // Filtrar solo Leads creados manualmente (CreatedById = OwnerId)
+        for (Lead lead : recentLeads) {
             if (lead.CreatedById == lead.OwnerId) {
                 activeAdvisors.add(lead.CreatedById);
             }

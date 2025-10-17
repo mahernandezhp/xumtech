@@ -10,15 +10,39 @@
  * =============================================================================
  * 1.0     | 2025-10-17 | Sistema | Creación inicial - Utilidades para testing
  *         |            |         | y ejecución manual del sistema
+ * 1.1     | 2025-10-17 | Sistema | Refactoring: Uso de VEC_LeadQueries para
+ *         |            |         | centralizar consultas SOQL y validaciones
+ * 1.2     | 2025-10-17 | Sistema | Separación: Uso de VEC_UserQueries, VEC_LeadQueries
+ *         |            |         | y VEC_SystemQueries según responsabilidades
  * =============================================================================
  */
 public class VEC_ProspectActivityUtils {
+    
+    // Instancias de consultas especializadas
+    private VEC_UserQueries userQueries;
+    private VEC_LeadQueries leadQueries;
+    private VEC_EmailTemplateQueries emailTemplateQueries;
+    private VEC_OrgWideEmailAddressQueries orgWideEmailQueries;
+    private VEC_RecordTypeQueries recordTypeQueries;
+    private VEC_CronTriggerQueries cronTriggerQueries;
+    
+    /**
+     * @description Constructor
+     */
+    public VEC_ProspectActivityUtils() {
+        this.userQueries = new VEC_UserQueries();
+        this.leadQueries = new VEC_LeadQueries();
+        this.emailTemplateQueries = new VEC_EmailTemplateQueries();
+        this.orgWideEmailQueries = new VEC_OrgWideEmailAddressQueries();
+        this.recordTypeQueries = new VEC_RecordTypeQueries();
+        this.cronTriggerQueries = new VEC_CronTriggerQueries();
+    }
     
     /**
      * @description Ejecuta el proceso completo de verificación de actividad manualmente
      * @return String Resultado de la ejecución
      */
-    public static String executeManualCheck() {
+    public String executeManualCheck() {
         try {
             VEC_ProspectActivityBatch batch = new VEC_ProspectActivityBatch();
             Id batchId = Database.executeBatch(batch, 50); // Ajustado a 50 para respetar límites
@@ -34,7 +58,7 @@ public class VEC_ProspectActivityUtils {
      * @description Programa el job de verificación de actividad
      * @return String Resultado de la programación
      */
-    public static String scheduleProspectActivityJob() {
+    public String scheduleProspectActivityJob() {
         try {
             // Cancelar jobs existentes primero
             VEC_ProspectActivityScheduler.cancelExistingJobs();
@@ -53,42 +77,29 @@ public class VEC_ProspectActivityUtils {
      * @description Obtiene estadísticas de asesores y actividad
      * @return String Reporte de estadísticas
      */
-    public static String getActivityStatistics() {
+    public String getActivityStatistics() {
         try {
-            // Contar asesores activos
-            Integer totalAdvisors = [
-                SELECT COUNT()
-                FROM User 
-                WHERE IsActive = true
-                AND Profile.Name = 'VEC Asesor U4O'
-                AND Email != null
-                AND (NOT Email LIKE '%.invalid')
-                AND ManagerId != null
-            ];
-            
-            // Contar managers activos
-            Integer totalManagers = [
-                SELECT COUNT()
-                FROM User 
-                WHERE IsActive = true
-                AND Profile.Name = 'Gerente U4O'
-                AND Email != null
-                AND (NOT Email LIKE '%.invalid')
-            ];
+            // Usar consultas centralizadas de usuarios para contar
+            Integer totalAdvisors = userQueries.countActiveAdvisors();
+            Integer totalManagers = userQueries.countActiveManagers();
             
             // Actividad reciente (últimos 14 días) - Solo Leads
             Date twoWeeksAgo = Date.today().addDays(-14);
             
             Set<Id> activeAdvisorIds = new Set<Id>();
             
-            // Leads creados manualmente con RecordType "Empresas U4O" y no convertidos
-            for (Lead lead : [
-                SELECT CreatedById, OwnerId, RecordType.DeveloperName, IsConverted
-                FROM Lead
-                WHERE CreatedDate >= :twoWeeksAgo
-                AND IsConverted = false
-                AND RecordType.DeveloperName = 'Empresas_U4O'
-            ]) {
+            // Obtener todos los asesores para verificar su actividad
+            List<User> allAdvisors = userQueries.getActiveAdvisorsWithManagers();
+            Set<Id> allAdvisorIds = new Set<Id>();
+            for (User advisor : allAdvisors) {
+                allAdvisorIds.add(advisor.Id);
+            }
+            
+            // Usar consulta centralizada para obtener Leads manuales
+            List<Lead> recentLeads = leadQueries.getManualLeadsByAdvisors(allAdvisorIds, twoWeeksAgo);
+            
+            // Filtrar Leads creados manualmente
+            for (Lead lead : recentLeads) {
                 if (lead.CreatedById == lead.OwnerId) {
                     activeAdvisorIds.add(lead.CreatedById);
                 }
@@ -118,48 +129,28 @@ public class VEC_ProspectActivityUtils {
      * @description Valida la configuración del sistema antes de la ejecución
      * @return String Resultado de la validación
      */
-    public static String validateSystemConfiguration() {
+    public String validateSystemConfiguration() {
         List<String> issues = new List<String>();
         
         try {
-            // Verificar Email Template
-            List<EmailTemplate> templates = [
-                SELECT Id, Name 
-                FROM EmailTemplate 
-                WHERE DeveloperName = 'VEC_Manager_Prospect_Activity_Alert'
-            ];
-            
-            if (templates.isEmpty()) {
+            // Verificar Email Template usando consulta centralizada del sistema
+            EmailTemplate template = emailTemplateQueries.getProspectActivityEmailTemplate();
+            if (template == null) {
                 issues.add('❌ Email Template "VEC_Manager_Prospect_Activity_Alert" no encontrado');
             } else {
                 issues.add('✅ Email Template configurado correctamente');
             }
             
-            // Verificar OrgWideEmailAddress
-            List<OrgWideEmailAddress> orgEmails = [
-                SELECT Id, Address, DisplayName
-                FROM OrgWideEmailAddress 
-                WHERE IsAllowAllProfiles = true
-            ];
-            
-            if (orgEmails.isEmpty()) {
+            // Verificar OrgWideEmailAddress usando consulta centralizada del sistema
+            OrgWideEmailAddress orgEmail = orgWideEmailQueries.getOrgWideEmailAddress();
+            if (orgEmail == null) {
                 issues.add('❌ No hay OrgWideEmailAddress configurado');
             } else {
-                issues.add('✅ OrgWideEmailAddress disponible: ' + orgEmails[0].Address);
+                issues.add('✅ OrgWideEmailAddress disponible: ' + orgEmail.Address);
             }
             
-            // Verificar perfiles
-            Map<String, Integer> profileCounts = new Map<String, Integer>();
-            
-            for (AggregateResult ar : [
-                SELECT Profile.Name profileName, COUNT(Id) userCount
-                FROM User 
-                WHERE IsActive = true
-                AND Profile.Name IN ('VEC Asesor U4O', 'Gerente U4O')
-                GROUP BY Profile.Name
-            ]) {
-                profileCounts.put((String)ar.get('profileName'), (Integer)ar.get('userCount'));
-            }
+            // Verificar perfiles usando consulta centralizada de usuarios
+            Map<String, Integer> profileCounts = userQueries.getUserCountsByProfile();
             
             Integer advisorCount = profileCounts.get('VEC Asesor U4O') != null ? profileCounts.get('VEC Asesor U4O') : 0;
             Integer managerCount = profileCounts.get('Gerente U4O') != null ? profileCounts.get('Gerente U4O') : 0;
@@ -175,12 +166,16 @@ public class VEC_ProspectActivityUtils {
                 issues.add('⚠️ No se encontraron managers con perfil "Gerente U4O"');
             }
             
-            // Verificar jobs programados
-            List<CronTrigger> scheduledJobs = [
-                SELECT Id, CronJobDetail.Name, State, NextFireTime
-                FROM CronTrigger 
-                WHERE CronJobDetail.Name LIKE 'VEC Prospect Activity Alert%'
-            ];
+            // Verificar RecordType usando consulta centralizada del sistema
+            Boolean recordTypeExists = recordTypeQueries.validateLeadRecordType('Empresas_U4O');
+            if (recordTypeExists) {
+                issues.add('✅ RecordType "Empresas U4O" para Leads configurado');
+            } else {
+                issues.add('❌ RecordType "Empresas U4O" para Leads no encontrado');
+            }
+            
+            // Verificar jobs programados usando consulta centralizada del sistema
+            List<CronTrigger> scheduledJobs = cronTriggerQueries.getScheduledProspectActivityJobs();
             
             if (scheduledJobs.isEmpty()) {
                 issues.add('❌ No hay jobs programados');
@@ -201,9 +196,9 @@ public class VEC_ProspectActivityUtils {
     
     /**
      * @description Método para ejecutar desde Developer Console
-     * Ejemplo de uso: VEC_ProspectActivityUtils.runFromConsole();
+     * Ejemplo de uso: VEC_ProspectActivityUtils utils = new VEC_ProspectActivityUtils(); utils.runFromConsole();
      */
-    public static void runFromConsole() {
+    public void runFromConsole() {
         System.debug('=== VEC PROSPECT ACTIVITY SYSTEM ===');
         System.debug(validateSystemConfiguration());
         System.debug(getActivityStatistics());

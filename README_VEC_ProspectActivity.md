@@ -33,6 +33,33 @@ Este sistema automatizado monitorea la actividad de creación manual de Leads co
 - **Propósito**: Utilidades para testing y ejecución manual
 - **Funciones**: Validación de configuración, estadísticas, ejecución manual
 
+#### `VEC_UserQueries`
+- **Propósito**: Consultas SOQL específicas para usuarios (Asesores y Managers)
+- **Funciones**: 
+  - Consultas de asesores activos con managers
+  - Datos específicos de managers
+  - Conteos y estadísticas de usuarios
+  - Validaciones de perfiles
+  - Relaciones manager-asesor
+
+#### `VEC_LeadQueries`
+- **Propósito**: Consultas SOQL específicas para Leads
+- **Funciones**: 
+  - Leads manuales por asesores y período
+  - Conteos de Leads por asesor
+  - Estadísticas de actividad de Leads
+  - Filtros por RecordType "Empresas U4O"
+  - Leads por status
+
+#### `VEC_SystemQueries`
+- **Propósito**: Consultas SOQL de configuración del sistema
+- **Funciones**: 
+  - Email Templates y OrgWideEmailAddress
+  - Jobs programados y AsyncApexJobs
+  - Validación de RecordTypes y Perfiles
+  - Límites del sistema
+  - Metadata del sistema
+
 ### 2. Email Template
 
 #### `VEC_Manager_Prospect_Activity_Alert`
@@ -145,7 +172,13 @@ force-app/main/default/
 │   ├── VEC_ProspectActivityEmailProcessor.cls
 │   ├── VEC_ProspectActivityEmailProcessor.cls-meta.xml
 │   ├── VEC_ProspectActivityUtils.cls
-│   └── VEC_ProspectActivityUtils.cls-meta.xml
+│   ├── VEC_ProspectActivityUtils.cls-meta.xml
+│   ├── VEC_UserQueries.cls
+│   ├── VEC_UserQueries.cls-meta.xml
+│   ├── VEC_LeadQueries.cls
+│   ├── VEC_LeadQueries.cls-meta.xml
+│   ├── VEC_SystemQueries.cls
+│   └── VEC_SystemQueries.cls-meta.xml
 └── email/
     └── VEC_EmailTemplates/
         ├── VEC_Manager_Prospect_Activity_Alert.email
@@ -204,20 +237,47 @@ scripts/apex/
 - Usar `System.debug()` para monitorear ejecución
 - Revisar Setup > Apex Jobs para estado de batches
 
+## Arquitectura del Sistema
+
+### Separación de Responsabilidades
+- **VEC_ProspectActivityScheduler**: Programación y orquestación
+- **VEC_ProspectActivityBatch**: Lógica de procesamiento principal
+- **VEC_ProspectActivityEmailProcessor**: Manejo de comunicaciones
+- **VEC_UserQueries**: Capa de acceso a datos de usuarios
+- **VEC_LeadQueries**: Capa de acceso a datos de Leads
+- **VEC_SystemQueries**: Capa de acceso a configuración del sistema
+- **VEC_ProspectActivityUtils**: Herramientas de administración
+
+### Ventajas de la Centralización de Consultas
+- **Reutilización**: Consultas disponibles para múltiples clases
+- **Mantenimiento**: Cambios en una sola ubicación
+- **Consistencia**: Criterios uniformes en todo el sistema
+- **Testing**: Fácil simulación de datos para pruebas
+- **Performance**: Optimización centralizada de consultas
+
 ## Mantenimiento
 
 ### Actualizaciones
 - Versionar cambios en el encabezado de cada clase
 - Documentar modificaciones en el historial
 - Probar en Sandbox antes de producción
+- **Consultas**: Modificar en las clases Query específicas:
+  - **Usuarios**: `VEC_UserQueries`
+  - **Leads**: `VEC_LeadQueries` 
+  - **Sistema**: `VEC_SystemQueries`
 
 ### Monitoreo Periódico
 - Revisar logs de ejecución semanalmente
 - Validar estadísticas de actividad mensualmente
 - Verificar configuración de email template trimestralmente
+- **Performance**: Monitorear tiempos de consulta en clases Query
 
 ---
 
-**Versión**: 1.0  
+**Versión**: 1.3  
 **Fecha de Creación**: 2025-10-17  
-**Última Actualización**: 2025-10-17
+**Última Actualización**: 2025-10-17  
+**Cambios v1.3**: Separación especializada de consultas SOQL en 3 clases:
+- VEC_UserQueries (usuarios)
+- VEC_LeadQueries (Leads)  
+- VEC_SystemQueries (configuración)
