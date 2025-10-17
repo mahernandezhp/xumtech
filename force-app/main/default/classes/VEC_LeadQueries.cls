@@ -109,18 +109,6 @@ public class VEC_LeadQueries {
         ];
     }
     
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
     /**
      * @description Obtiene estadísticas de actividad de Leads para un período específico
      * @param fromDate Fecha desde la cual contar actividad

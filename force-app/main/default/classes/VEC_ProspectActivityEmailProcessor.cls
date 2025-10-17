@@ -32,6 +32,9 @@ public class VEC_ProspectActivityEmailProcessor implements Queueable {
     private VEC_EmailTemplateQueries emailTemplateQueries;
     private VEC_OrgWideEmailAddressQueries orgWideEmailQueries;
     
+    // Lista de emails pre-construidos para envío directo
+    private List<Messaging.SingleEmailMessage> preBuiltEmails;
+    
     /**
      * @description Constructor
      */
@@ -56,50 +59,127 @@ public class VEC_ProspectActivityEmailProcessor implements Queueable {
     }
     
     /**
+     * @description Método para procesar emails ya construidos (nueva funcionalidad)
+     * @param emails Lista de emails pre-construidos listos para enviar
+     * @return VEC_ProspectActivityEmailProcessor Instancia para encolar
+     */
+    public VEC_ProspectActivityEmailProcessor processPreBuiltEmails(List<Messaging.SingleEmailMessage> emails) {
+        this.preBuiltEmails = emails != null ? emails : new List<Messaging.SingleEmailMessage>();
+        return this;
+    }
+    
+    /**
      * @description Método execute del Queueable
      * @param context Contexto del queueable
      */
     public void execute(QueueableContext context) {
         try {
-            System.debug('VEC_ProspectActivityEmailProcessor: Procesando emails. Índice: ' + currentIndex + ' de ' + managerIdsToProcess.size());
-            
-            List<Messaging.SingleEmailMessage> emailsToSend = new List<Messaging.SingleEmailMessage>();
-            Integer emailsInThisBatch = 0;
-            
-            // Procesar hasta MAX_EMAILS_PER_TRANSACTION o hasta terminar la lista
-            while (currentIndex < managerIdsToProcess.size() && emailsInThisBatch < MAX_EMAILS_PER_TRANSACTION) {
-                Id managerId = managerIdsToProcess[currentIndex];
-                List<User> inactiveAdvisors = managersToAdvisorsMap.get(managerId);
-                
-                if (inactiveAdvisors != null && !inactiveAdvisors.isEmpty()) {
-                    Messaging.SingleEmailMessage email = createManagerNotificationEmail(managerId, inactiveAdvisors);
-                    if (email != null) {
-                        emailsToSend.add(email);
-                        emailsInThisBatch++;
-                    }
-                }
-                
-                currentIndex++;
-            }
-            
-            // Enviar emails si hay alguno
-            if (!emailsToSend.isEmpty()) {
-                Messaging.SendEmailResult[] results = Messaging.sendEmail(emailsToSend);
-                processEmailResults(results);
-                emailsSent += emailsToSend.size();
-            }
-            
-            // Si aún hay managers por procesar, encolar siguiente lote
-            if (currentIndex < managerIdsToProcess.size()) {
-                System.enqueueJob(this);
+            // Determinar qué tipo de procesamiento realizar
+            if (preBuiltEmails != null && !preBuiltEmails.isEmpty()) {
+                executePreBuiltEmailProcessing();
+            } else if (managersToAdvisorsMap != null && !managersToAdvisorsMap.isEmpty()) {
+                executeLegacyEmailProcessing();
             } else {
-                System.debug('VEC_ProspectActivityEmailProcessor: Proceso completado. Total emails enviados: ' + emailsSent);
+                System.debug('VEC_ProspectActivityEmailProcessor: No hay emails para procesar');
             }
             
         } catch (Exception e) {
-            System.debug(LoggingLevel.ERROR, 'VEC_ProspectActivityEmailProcessor Error: ' + e.getMessage());
-            System.debug(LoggingLevel.ERROR, 'Stack Trace: ' + e.getStackTraceString());
+            System.debug(LoggingLevel.ERROR, 'VEC_ProspectActivityEmailProcessor execute error: ' + e.getMessage());
         }
+    }
+    
+    /**
+     * @description Procesa emails ya construidos (nuevo flujo)
+     */
+    private void executePreBuiltEmailProcessing() {
+        System.debug('VEC_ProspectActivityEmailProcessor: Procesando ' + preBuiltEmails.size() + ' emails pre-construidos');
+        
+        List<Messaging.SingleEmailMessage> emailsToSend = new List<Messaging.SingleEmailMessage>();
+        Integer emailsProcessed = 0;
+        
+        // Enviar hasta MAX_EMAILS_PER_TRANSACTION emails
+        for (Messaging.SingleEmailMessage email : preBuiltEmails) {
+            if (emailsProcessed >= MAX_EMAILS_PER_TRANSACTION) {
+                break;
+            }
+            
+            emailsToSend.add(email);
+            emailsProcessed++;
+        }
+        
+        // Enviar emails
+        if (!emailsToSend.isEmpty()) {
+            sendEmails(emailsToSend);
+        }
+        
+        // Si quedan emails por procesar, encolar siguiente lote
+        if (preBuiltEmails.size() > emailsProcessed) {
+            List<Messaging.SingleEmailMessage> remainingEmails = new List<Messaging.SingleEmailMessage>();
+            for (Integer i = emailsProcessed; i < preBuiltEmails.size(); i++) {
+                remainingEmails.add(preBuiltEmails[i]);
+            }
+            
+            VEC_ProspectActivityEmailProcessor nextProcessor = new VEC_ProspectActivityEmailProcessor();
+            System.enqueueJob(nextProcessor.processPreBuiltEmails(remainingEmails));
+            
+            System.debug('VEC_ProspectActivityEmailProcessor: ' + remainingEmails.size() + ' emails restantes encolados');
+        }
+    }
+    
+    /**
+     * @description Procesa emails usando el flujo legacy (mantener compatibilidad)
+     */
+    private void executeLegacyEmailProcessing() {
+        System.debug('VEC_ProspectActivityEmailProcessor: Procesando emails legacy. Índice: ' + currentIndex + ' de ' + managerIdsToProcess.size());
+        
+        List<Messaging.SingleEmailMessage> emailsToSend = new List<Messaging.SingleEmailMessage>();
+        Integer emailsInThisBatch = 0;
+        
+        // Procesar hasta MAX_EMAILS_PER_TRANSACTION managers
+        while (currentIndex < managerIdsToProcess.size() && emailsInThisBatch < MAX_EMAILS_PER_TRANSACTION) {
+            Id managerId = managerIdsToProcess[currentIndex];
+            List<User> inactiveAdvisors = managersToAdvisorsMap.get(managerId);
+            
+            if (inactiveAdvisors != null && !inactiveAdvisors.isEmpty()) {
+                Messaging.SingleEmailMessage email = createManagerNotificationEmail(managerId, inactiveAdvisors);
+                if (email != null) {
+                    emailsToSend.add(email);
+                    emailsInThisBatch++;
+                }
+            }
+            
+            currentIndex++;
+        }
+        
+        // Enviar emails
+        if (!emailsToSend.isEmpty()) {
+            sendEmails(emailsToSend);
+        }
+        
+        // Si aún hay managers por procesar, encolar siguiente lote
+        if (currentIndex < managerIdsToProcess.size()) {
+            System.enqueueJob(this);
+        } else {
+            System.debug('VEC_ProspectActivityEmailProcessor: Proceso legacy completado. Total emails enviados: ' + emailsSent);
+        }
+    }
+    
+    /**
+     * @description Envía lista de emails y procesa resultados
+     * @param emailsToSend Lista de emails a enviar
+     */
+    private void sendEmails(List<Messaging.SingleEmailMessage> emailsToSend) {
+        try {
+            Messaging.SendEmailResult[] results = Messaging.sendEmail(emailsToSend);
+            processEmailResults(results);
+            emailsSent += emailsToSend.size();
+            
+            System.debug('VEC_ProspectActivityEmailProcessor: ' + emailsToSend.size() + ' emails enviados exitosamente');
+            
+        } catch (Exception e) {
+            System.debug(LoggingLevel.ERROR, 'VEC_ProspectActivityEmailProcessor: Error enviando emails: ' + e.getMessage());
+        }
+    }
     }
     
     /**
