@@ -12,3 +12,7 @@ System.debug('My name is ' + tempvar);
 
 
 XUM_AutoApproveMaxLimitScheduler.scheduleEveryMinute();
+
+StageName
+VEC_Motivo_Cerrada_perdida__c
+VEC_Descuento__c

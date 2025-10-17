@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<EmailTemplate xmlns="http://soap.sforce.com/2006/04/metadata">
+    <available>true</available>
+    <description>Template para notificar a managers sobre asesores sin actividad de Leads Empresas U4O</description>
+    <encodingKey>UTF-8</encodingKey>
+    <name>VEC Manager Prospect Activity Alert</name>
+    <style>none</style>
+    <subject>Alerta: Asesores sin actividad de Leads Empresas U4O - Últimas 2 semanas</subject>
+    <textOnly>Estimado/a {!User.Name},
+
+Esperamos que se encuentre bien.
+
+Le informamos que los siguientes asesores bajo su supervisión no han registrado actividad de creación de prospectos manuales en las últimas 2 semanas:
+
+Esta información es importante para el seguimiento de la productividad del equipo y puede requerir su atención para:
+- Verificar la carga de trabajo de los asesores
+- Proporcionar apoyo adicional si es necesario
+- Revisar objetivos y metas del período
+
+IMPORTANTE: 
+- Se adjunta un archivo CSV con el detalle completo de los asesores y enlaces directos a sus perfiles
+- Esta alerta se genera automáticamente cada día laboral
+- Solo se consideran prospectos creados manualmente (donde el creador y propietario es el mismo usuario)
+
+Por favor, tome las acciones necesarias para asegurar la productividad del equipo.
+
+Si tiene alguna consulta sobre esta información, no dude en contactar al equipo de administración del sistema.
+
+Saludos cordiales,
+Sistema Automatizado VEC
+</textOnly>
+    <type>custom</type>
+    <uiType>Aloha</uiType>
+</EmailTemplate>
