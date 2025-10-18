@@ -1,7 +1,7 @@
 /**
  * @description Clase centralizada para todas las consultas SOQL relacionadas con Leads
  * @author Sistema
- * @version 1.2
+ * @version 1.4
  * @since 2025-10-17
  * 
  * Historial de Modificaciones:
@@ -14,6 +14,10 @@
  *         |            |         | VEC_UserQueries, solo Leads aquí
  * 1.2     | 2025-10-17 | Sistema | Refactoring: Remoción de static, métodos de
  *         |            |         | instancia para mejor testing
+ * 1.3     | 2025-10-17 | Sistema | Flexibilidad: RecordTypes como Set<String>
+ *         |            |         | en parámetros con métodos legacy compatibles
+ * 1.4     | 2025-10-17 | Sistema | Limpieza: Remoción de métodos no utilizados
+ *         |            |         | por otras clases VEC_ para simplificar clase
  * =============================================================================
  */
 public class VEC_LeadQueries {
@@ -40,121 +44,28 @@ public class VEC_LeadQueries {
      * @description Obtiene Leads creados manualmente por asesores específicos en un período
      * @param advisorIds Set de IDs de asesores a verificar
      * @param fromDate Fecha desde la cual verificar actividad
+     * @param recordTypes Set de nombres de RecordTypes a filtrar
      * @return List<Lead> Lista de Leads que cumplen criterios
      */
-    public List<Lead> getManualLeadsByAdvisors(Set<Id> advisorIds, Date fromDate) {
+    public List<Lead> getManualLeadsByAdvisors(Set<Id> advisorIds, Date fromDate, Set<String> recordTypes) {
         return [
             SELECT CreatedById, OwnerId, RecordType.DeveloperName, IsConverted, Name, CreatedDate
             FROM Lead
             WHERE CreatedById IN :advisorIds
             AND CreatedDate >= :fromDate
             AND IsConverted = false
-            AND RecordType.DeveloperName = :leadRecordType
+            AND RecordType.DeveloperName IN :recordTypes
         ];
     }
     
     /**
-     * @description Obtiene todos los Leads del RecordType Empresas U4O en un período
-     * @param fromDate Fecha desde la cual buscar
-     * @return List<Lead> Lista de Leads encontrados
+     * @description Obtiene Leads creados manualmente por asesores específicos en un período (método legacy)
+     * @param advisorIds Set de IDs de asesores a verificar
+     * @param fromDate Fecha desde la cual verificar actividad
+     * @return List<Lead> Lista de Leads que cumplen criterios
      */
-    public List<Lead> getEmpresasLeadsByDate(Date fromDate) {
-        return [
-            SELECT CreatedById, OwnerId, RecordType.DeveloperName, IsConverted, Name, CreatedDate, Status
-            FROM Lead
-            WHERE CreatedDate >= :fromDate
-            AND RecordType.DeveloperName = :leadRecordType
-            AND IsConverted = false
-        ];
-    }
-    
-    /**
-     * @description Cuenta Leads por asesor en un período específico
-     * @param advisorIds Set de IDs de asesores
-     * @param fromDate Fecha desde la cual contar
-     * @return Map<Id, Integer> Mapa con asesor ID como key y conteo como value
-     */
-    public Map<Id, Integer> getLeadCountByAdvisor(Set<Id> advisorIds, Date fromDate) {
-        Map<Id, Integer> leadCounts = new Map<Id, Integer>();
-        
-        for (AggregateResult ar : [
-            SELECT CreatedById advisorId, COUNT(Id) leadCount
-            FROM Lead
-            WHERE CreatedById IN :advisorIds
-            AND CreatedDate >= :fromDate
-            AND IsConverted = false
-            AND RecordType.DeveloperName = :leadRecordType
-            GROUP BY CreatedById
-        ]) {
-            leadCounts.put((Id)ar.get('advisorId'), (Integer)ar.get('leadCount'));
-        }
-        
-        return leadCounts;
-    }
-    
-    /**
-     * @description Obtiene Leads por Status específico
-     * @param status Status del Lead a filtrar
-     * @param fromDate Fecha desde la cual buscar
-     * @return List<Lead> Lista de Leads con el status especificado
-     */
-    public List<Lead> getLeadsByStatus(String status, Date fromDate) {
-        return [
-            SELECT CreatedById, OwnerId, RecordType.DeveloperName, IsConverted, Name, CreatedDate, Status
-            FROM Lead
-            WHERE Status = :status
-            AND CreatedDate >= :fromDate
-            AND RecordType.DeveloperName = :leadRecordType
-            AND IsConverted = false
-        ];
-    }
-    
-    /**
-     * @description Obtiene estadísticas de actividad de Leads para un período específico
-     * @param fromDate Fecha desde la cual contar actividad
-     * @return Map<String, Object> Estadísticas de actividad
-     */
-    public Map<String, Object> getLeadActivityStats(Date fromDate) {
-        Map<String, Object> stats = new Map<String, Object>();
-        
-        // Contar Leads totales en el período
-        Integer totalLeads = [
-            SELECT COUNT()
-            FROM Lead
-            WHERE CreatedDate >= :fromDate
-            AND RecordType.DeveloperName = :leadRecordType
-            AND IsConverted = false
-        ];
-        
-        // Contar Leads manuales en el período
-        Integer manualLeads = 0;
-        for (Lead lead : [
-            SELECT CreatedById, OwnerId
-            FROM Lead
-            WHERE CreatedDate >= :fromDate
-            AND RecordType.DeveloperName = :leadRecordType
-            AND IsConverted = false
-        ]) {
-            if (lead.CreatedById == lead.OwnerId) {
-                manualLeads++;
-            }
-        }
-        
-        stats.put('totalLeads', totalLeads);
-        stats.put('manualLeads', manualLeads);
-        stats.put('automaticLeads', totalLeads - manualLeads);
-        stats.put('fromDate', fromDate);
-        
-        return stats;
-    }
-    
-    /**
-     * @description Método utilitario para obtener constantes de Leads
-     * @return Map<String, String> Constantes de Leads utilizadas
-     */
-    public Map<String, String> getLeadConstants() {
-        return new Map<String, String>{
-            'LEAD_RECORD_TYPE' => leadRecordType
-        };
+    public List<Lead> getManualLeadsByAdvisors(Set<Id> advisorIds, Date fromDate) {
+        Set<String> defaultRecordTypes = new Set<String>{ this.leadRecordType };
+        return getManualLeadsByAdvisors(advisorIds, fromDate, defaultRecordTypes);
     }
 }
