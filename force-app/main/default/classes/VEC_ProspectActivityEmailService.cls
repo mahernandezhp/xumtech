@@ -228,7 +228,7 @@ public class VEC_ProspectActivityEmailService {
         try {
             logMessage('Construyendo emails de notificación...');
             
-            List<Messaging.SingleEmailMessage> emails = emailBuilder.buildManagerNotificationEmails(managersToInactiveAdvisors);
+            List<Messaging.SingleEmailMessage> emails = emailBuilder.buildManagerNotificationEmails(managersToInactiveAdvisors, emailTemplateName);
             
             logMessage('Emails construidos: ' + emails.size());
             

@@ -1,7 +1,7 @@
 /**
  * @description Builder class para construir emails de notificación a managers sobre asesores sin actividad
  * @author Marco Hernandez
- * @version 1.3
+ * @version 1.4
  * @since 2025-10-17
  * 
  * Historial de Modificaciones:
@@ -16,6 +16,8 @@
  *         |            |                 | evitar múltiples queries en loop
  * 1.3     | 2025-10-17 | Marco Hernandez | Mega-optimización: Uso de Manager data del primer
  *         |            |                 | asesor eliminando query adicional de managers
+ * 1.4     | 2025-10-17 | Marco Hernandez | Flexibilidad: emailTemplateName por parámetro
+ *         |            |                 | en buildManagerNotificationEmails
  * =============================================================================
  */
 public class VEC_ProspectActivityEmailBuilder {
@@ -304,15 +306,28 @@ public class VEC_ProspectActivityEmailBuilder {
     
     /**
      * @description Obtiene el email template configurado
+     * @param emailTemplateName Nombre del developer del template (opcional)
      * @return EmailTemplate Template o null si no existe
      */
-    private EmailTemplate getEmailTemplate() {
+    private EmailTemplate getEmailTemplate(String emailTemplateName) {
         try {
-            return emailTemplateQueries.getProspectActivityEmailTemplate();
+            if (String.isNotBlank(emailTemplateName)) {
+                return emailTemplateQueries.getProspectActivityEmailTemplate(emailTemplateName);
+            } else {
+                return emailTemplateQueries.getProspectActivityEmailTemplate();
+            }
         } catch (Exception e) {
             System.debug(LoggingLevel.ERROR, 'VEC_ProspectActivityEmailBuilder: Error obteniendo template: ' + e.getMessage());
             return null;
         }
+    }
+    
+    /**
+     * @description Obtiene el email template configurado (método legacy)
+     * @return EmailTemplate Template o null si no existe
+     */
+    private EmailTemplate getEmailTemplate() {
+        return getEmailTemplate(null);
     }
     
     /**
