@@ -94,25 +94,6 @@ public class VEC_ProspectActivityEmailService {
     /**
      * @description Método principal para procesar asesores inactivos y enviar notificaciones
      * @param emailTemplateName Nombre del developer del email template a usar
-     * @return ProcessResult Resultado del procesamiento
-     */
-    public ProcessResult processInactiveAdvisorsAndSendEmails(String emailTemplateName) {
-        return processInactiveAdvisorsAndSendEmails(emailTemplateName, DEFAULT_LEAD_RECORD_TYPES, DEFAULT_ADVISOR_PROFILES);
-    }
-    
-    /**
-     * @description Método principal para procesar asesores inactivos y enviar notificaciones
-     * @param emailTemplateName Nombre del developer del email template a usar
-     * @param leadRecordTypes Set de RecordTypes de Lead a considerar para actividad
-     * @return ProcessResult Resultado del procesamiento
-     */
-    public ProcessResult processInactiveAdvisorsAndSendEmails(String emailTemplateName, Set<String> leadRecordTypes) {
-        return processInactiveAdvisorsAndSendEmails(emailTemplateName, leadRecordTypes, DEFAULT_ADVISOR_PROFILES);
-    }
-    
-    /**
-     * @description Método principal para procesar asesores inactivos y enviar notificaciones
-     * @param emailTemplateName Nombre del developer del email template a usar
      * @param leadRecordTypes Set de RecordTypes de Lead a considerar para actividad
      * @param advisorProfiles Set de perfiles de asesores a considerar
      * @return ProcessResult Resultado del procesamiento

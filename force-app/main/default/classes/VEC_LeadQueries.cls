@@ -21,25 +21,7 @@
  * =============================================================================
  */
 public class VEC_LeadQueries {
-    
-    // Variable de instancia para criterios de consulta de Leads
-    private final String leadRecordType;
-    
-    /**
-     * @description Constructor con valores por defecto
-     */
-    public VEC_LeadQueries() {
-        this.leadRecordType = 'Empresas_U4O';
-    }
-    
-    /**
-     * @description Constructor con RecordType personalizado (para testing)
-     * @param leadRecordType Nombre del RecordType de Lead
-     */
-    public VEC_LeadQueries(String leadRecordType) {
-        this.leadRecordType = leadRecordType;
-    }
-    
+
     /**
      * @description Obtiene Leads creados manualmente por asesores específicos en un período
      * @param advisorIds Set de IDs de asesores a verificar
@@ -56,16 +38,5 @@ public class VEC_LeadQueries {
             AND IsConverted = false
             AND RecordType.DeveloperName IN :recordTypes
         ];
-    }
-    
-    /**
-     * @description Obtiene Leads creados manualmente por asesores específicos en un período (método legacy)
-     * @param advisorIds Set de IDs de asesores a verificar
-     * @param fromDate Fecha desde la cual verificar actividad
-     * @return List<Lead> Lista de Leads que cumplen criterios
-     */
-    public List<Lead> getManualLeadsByAdvisors(Set<Id> advisorIds, Date fromDate) {
-        Set<String> defaultRecordTypes = new Set<String>{ this.leadRecordType };
-        return getManualLeadsByAdvisors(advisorIds, fromDate, defaultRecordTypes);
     }
 }
