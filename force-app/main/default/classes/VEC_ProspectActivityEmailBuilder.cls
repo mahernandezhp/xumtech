@@ -5,22 +5,23 @@
  * @since 2025-10-17
  * 
  * Historial de Modificaciones:
- * =============================================================================
- * Versión | Fecha      | Autor          | Descripción
- * =============================================================================
- * 1.0     | 2025-10-17 | Marco Hernandez | Creación inicial - Builder para construcción
- *         |            |                 | de emails con templates y attachments CSV
- * 1.1     | 2025-10-17 | Marco Hernandez | Optimización: setTargetObjectId para no contar
- *         |            |                 | contra límites diarios de email
- * 1.2     | 2025-10-17 | Marco Hernandez | Optimización queries: getAllManagersInfo para
- *         |            |                 | evitar múltiples queries en loop
- * 1.3     | 2025-10-17 | Marco Hernandez | Mega-optimización: Uso de Manager data del primer
- *         |            |                 | asesor eliminando query adicional de managers
- * 1.4     | 2025-10-17 | Marco Hernandez | Flexibilidad: emailTemplateName por parámetro
+ * ===============================================================================
+ * VERSION | FECHA      | AUTOR           | DESCRIPCION
+ * ===============================================================================
+ * 1.0     | 2025-01-17 | Marco Hernandez | Creación inicial del builder para
+ *         |            |                 | construcción de emails de notificación
+ * -------------------------------------------------------------------------------
+ * 1.1     | 2025-10-17 | Marco Hernandez | Agregadas validaciones de parámetros
+ *         |            |                 | y manejo de errores mejorado
+ * -------------------------------------------------------------------------------
+ * 1.2     | 2025-10-17 | Marco Hernandez | Optimización: obtener data de manager
+ *         |            |                 | del primer asesor para evitar queries
  *         |            |                 | en buildManagerNotificationEmails
- * 1.5     | 2025-10-17 | Marco Hernandez | Validaciones: Agregadas validaciones de parámetros
- *         |            |                 | null/vacíos siguiendo recomendaciones SonarCloud
- * =============================================================================
+ * -------------------------------------------------------------------------------
+ * 1.3     | 2025-01-17 | Marco Hernandez | Reducción de complejidad ciclomatica:
+ *         |            |                 | extracción de métodos para validación,
+ *         |            |                 | construcción y procesamiento de emails
+ * ===============================================================================
  */
 public class VEC_ProspectActivityEmailBuilder {
     
@@ -104,9 +105,9 @@ public class VEC_ProspectActivityEmailBuilder {
     
     /**
      * @description Construye emails para notificar a managers sobre asesores sin actividad
-     * @param managersToAdvisorsMap Mapa de managers y sus asesores sin actividad
-     * @param emailTemplateName Nombre del developer del email template (opcional)
-     * @return List<Messaging.SingleEmailMessage> Lista de emails listos para enviar
+     * @param managersToAdvisorsMap Mapa de manager ID a lista de asesores sin actividad
+     * @param emailTemplateName Nombre del developer del email template
+     * @return List<Messaging.SingleEmailMessage> Lista de emails para enviar
      * @throws VEC_ProspectActivityException Si hay errores en la construcción
      */
     public List<Messaging.SingleEmailMessage> buildManagerNotificationEmails(
@@ -119,52 +120,104 @@ public class VEC_ProspectActivityEmailBuilder {
             return new List<Messaging.SingleEmailMessage>();
         }
         
-        List<Messaging.SingleEmailMessage> emails = new List<Messaging.SingleEmailMessage>();
-        
         try {
             // Obtener configuración una sola vez (optimización)
             EmailTemplate template = getEmailTemplate(emailTemplateName);
+            validateEmailTemplate(template);
+            
             OrgWideEmailAddress orgEmail = getOrgWideEmailAddress();
             
-            if (template == null) {
-                throw new VEC_ProspectActivityException('Email template no encontrado');
-            }
-            
-            // Construir un email por manager
-            for (Id managerId : managersToAdvisorsMap.keySet()) {
-                List<User> advisorsWithoutActivity = managersToAdvisorsMap.get(managerId);
-                
-                if (advisorsWithoutActivity != null && !advisorsWithoutActivity.isEmpty()) {
-                    // Obtener información del manager del primer asesor (todos tienen el mismo manager)
-                    User firstAdvisor = advisorsWithoutActivity[0];
-                    
-                    if (firstAdvisor.Manager != null) {
-                        Messaging.SingleEmailMessage email = buildSingleManagerEmail(
-                            firstAdvisor.Manager, 
-                            advisorsWithoutActivity, 
-                            template, 
-                            orgEmail
-                        );
-                        
-                        if (email != null) {
-                            emails.add(email);
-                        }
-                    } else {
-                        System.debug(LoggingLevel.WARN, 'VEC_ProspectActivityEmailBuilder: Manager no encontrado para asesor: ' + firstAdvisor.Name);
-                    }
-                }
-            }
+            // Construir emails para cada manager
+            List<Messaging.SingleEmailMessage> emails = buildEmailsForAllManagers(
+                managersToAdvisorsMap, 
+                template, 
+                orgEmail
+            );
             
             System.debug('VEC_ProspectActivityEmailBuilder: ' + emails.size() + ' emails construidos exitosamente');
+            return emails;
             
         } catch (Exception e) {
             String errorMsg = 'Error construyendo emails: ' + e.getMessage();
             System.debug(LoggingLevel.ERROR, 'VEC_ProspectActivityEmailBuilder: ' + errorMsg);
             throw new VEC_ProspectActivityException(errorMsg, e);
         }
+    }
+    
+    /**
+     * @description Valida que el template de email sea válido
+     * @param template Template a validar
+     * @throws VEC_ProspectActivityException Si el template es null
+     */
+    private void validateEmailTemplate(EmailTemplate template) {
+        if (template == null) {
+            throw new VEC_ProspectActivityException('Email template no encontrado');
+        }
+    }
+    
+    /**
+     * @description Construye emails para todos los managers en el mapa
+     * @param managersToAdvisorsMap Mapa de managers a asesores
+     * @param template Template de email
+     * @param orgEmail Dirección organizacional
+     * @return List<Messaging.SingleEmailMessage> Lista de emails construidos
+     */
+    private List<Messaging.SingleEmailMessage> buildEmailsForAllManagers(
+        Map<Id, List<User>> managersToAdvisorsMap,
+        EmailTemplate template,
+        OrgWideEmailAddress orgEmail
+    ) {
+        List<Messaging.SingleEmailMessage> emails = new List<Messaging.SingleEmailMessage>();
+        
+        // Construir un email por manager
+        for (Id managerId : managersToAdvisorsMap.keySet()) {
+            List<User> advisorsWithoutActivity = managersToAdvisorsMap.get(managerId);
+            
+            Messaging.SingleEmailMessage email = buildEmailForSingleManager(
+                advisorsWithoutActivity, 
+                template, 
+                orgEmail
+            );
+            
+            if (email != null) {
+                emails.add(email);
+            }
+        }
         
         return emails;
     }
+    
+    /**
+     * @description Construye email para un manager específico
+     * @param advisorsWithoutActivity Lista de asesores sin actividad
+     * @param template Template de email
+     * @param orgEmail Dirección organizacional
+     * @return Messaging.SingleEmailMessage Email construido o null si no es válido
+     */
+    private Messaging.SingleEmailMessage buildEmailForSingleManager(
+        List<User> advisorsWithoutActivity,
+        EmailTemplate template,
+        OrgWideEmailAddress orgEmail
+    ) {
+        if (advisorsWithoutActivity == null || advisorsWithoutActivity.isEmpty()) {
+            return null;
+        }
+        
+        // Obtener información del manager del primer asesor (todos tienen el mismo manager)
+        User firstAdvisor = advisorsWithoutActivity[0];
+        
+        if (firstAdvisor.Manager == null) {
+            System.debug(LoggingLevel.WARN, 'VEC_ProspectActivityEmailBuilder: Manager no encontrado para asesor: ' + firstAdvisor.Name);
+            return null;
+        }
+        
+        return buildSingleManagerEmail(
+            firstAdvisor.Manager, 
+            advisorsWithoutActivity, 
+            template, 
+            orgEmail
+        );
+    }    
     
     /**
      * @description Construye un email individual para un manager específico

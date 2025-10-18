@@ -6,20 +6,25 @@
  * @since 2025-10-17
  * 
  * Historial de Modificaciones:
- * =============================================================================
- * Versión | Fecha      | Autor          | Descripción
- * =============================================================================
- * 1.0     | 2025-10-17 | Marco Hernandez | Creación inicial - Service para orquestar
- *         |            |                 | consultas, construcción de emails y envío
- * 1.1     | 2025-10-17 | Marco Hernandez | Flexibilidad: Soporte para múltiples
- *         |            |                 | RecordTypes como Set<String> parámetro
- * 1.2     | 2025-10-17 | Marco Hernandez | Flexibilidad: Soporte para múltiples
- *         |            |                 | perfiles de usuarios como Set<String>
+ * ===============================================================================
+ * VERSION | FECHA      | AUTOR          | DESCRIPCION
+ * ===============================================================================
+ * 1.0     | 2025-01-17 | Marco Hernandez| Creación inicial del service para 
+ *         |            |                | orquestación de notificaciones por email
+ * -------------------------------------------------------------------------------
+ * 1.1     | 2025-10-17 | Marco Hernandez| Agregados parámetros flexibles con Sets,
+ *         |            |                | validaciones SonarCloud y manejo de errores
+ * -------------------------------------------------------------------------------
+ * 1.2     | 2025-10-17 | Marco Hernandez| Optimización de VEC_UserQueries y 
+ *         |            |                | VEC_ProspectActivityEmailBuilder
+ * -------------------------------------------------------------------------------
  * 1.3     | 2025-10-17 | Marco Hernandez | Simplificación: Solo filtro por perfil de asesor,
- *         |            |                 | manager puede ser de cualquier perfil
- * 1.4     | 2025-10-17 | Marco Hernandez | Validaciones: Agregadas validaciones de parámetros
- *         |            |                 | null/vacíos siguiendo recomendaciones SonarCloud
- * =============================================================================
+ *         |            |                | eliminado filtro de manager. Limpieza de métodos unused
+ * -------------------------------------------------------------------------------
+ * 1.4     | 2025-01-17 | Marco Hernandez | Reducción de complejidad ciclomatica siguiendo
+ *         |            |                | recomendaciones SonarCloud. Extracción de métodos
+ *         |            |                | para mejorar legibilidad y mantenibilidad
+ * ===============================================================================
  */
 public class VEC_ProspectActivityEmailService {
     
@@ -45,24 +50,6 @@ public class VEC_ProspectActivityEmailService {
         this.userQueries = new VEC_UserQueries();
         this.leadQueries = new VEC_LeadQueries();
         this.emailBuilder = new VEC_ProspectActivityEmailBuilder();
-        this.processingLog = new List<String>();
-    }
-    
-    /**
-     * @description Constructor para testing con mocks
-     * @param userQueries Mock de user queries
-     * @param leadQueries Mock de lead queries
-     * @param emailBuilder Mock de email builder
-     */
-    public VEC_ProspectActivityEmailService(
-        VEC_UserQueries userQueries, 
-        VEC_LeadQueries leadQueries, 
-        VEC_ProspectActivityEmailBuilder emailBuilder
-    ) {
-        // Validaciones de parámetros (SonarCloud)
-        this.userQueries = userQueries != null ? userQueries : new VEC_UserQueries();
-        this.leadQueries = leadQueries != null ? leadQueries : new VEC_LeadQueries();
-        this.emailBuilder = emailBuilder != null ? emailBuilder : new VEC_ProspectActivityEmailBuilder();
         this.processingLog = new List<String>();
     }
     
@@ -96,53 +83,73 @@ public class VEC_ProspectActivityEmailService {
 
     /**
      * @description Método principal para procesar asesores inactivos y enviar notificaciones
-     * @param emailTemplateName Nombre del developer del email template a usar
+     * @param advisorProfiles Set de nombres de perfiles de asesores a incluir
      * @param leadRecordTypes Set de RecordTypes de Lead a considerar para actividad
-     * @param advisorProfiles Set de perfiles de asesores a considerar
+     * @param emailTemplateName Nombre del developer del email template
      * @return ProcessResult Resultado del procesamiento
      */
-    public ProcessResult processInactiveAdvisorsAndSendEmails(String emailTemplateName, Set<String> leadRecordTypes, Set<String> advisorProfiles) {
+    public ProcessResult processInactiveAdvisorsAndSendEmails(Set<String> advisorProfiles, Set<String> leadRecordTypes, String emailTemplateName) {
         ProcessResult result = new ProcessResult();
         
         try {
-            logMessage('Iniciando procesamiento de asesores sin actividad');
+            logMessage('=== INICIANDO PROCESAMIENTO VEC PROSPECT ACTIVITY ===');
             
-            // 1. Obtener todos los asesores activos con sus managers
-            List<User> activeAdvisors = getActiveAdvisors(advisorProfiles);
+            // 1. Obtener asesores activos con validaciones
+            List<User> activeAdvisors = getActiveAdvisorsWithValidation(advisorProfiles);
             if (activeAdvisors.isEmpty()) {
-                return buildSuccessResult(result, 'No se encontraron asesores activos para procesar');
+                return buildSuccessResult(result, 'No se encontraron asesores activos con los perfiles especificados');
             }
-            
-            logMessage('Asesores activos encontrados: ' + activeAdvisors.size());
             
             // 2. Identificar asesores sin actividad reciente
             Map<Id, List<User>> managersToInactiveAdvisors = identifyInactiveAdvisors(activeAdvisors, leadRecordTypes);
-            
             if (managersToInactiveAdvisors.isEmpty()) {
-                return buildSuccessResult(result, 'No se encontraron asesores sin actividad');
+                return buildSuccessResult(result, 'No se encontraron asesores sin actividad reciente');
             }
             
-            // 3. Construir emails de notificación
-            List<Messaging.SingleEmailMessage> emails = buildNotificationEmails(managersToInactiveAdvisors, emailTemplateName);
-            
-            if (emails.isEmpty()) {
-                return buildErrorResult(result, 'No se pudieron construir los emails de notificación');
-            }
-            
-            // 4. Enviar emails usando VEC_EmailSendBatch
-            String batchJobId = sendEmailsViaBatch(emails);
-            
-            // 5. Preparar resultado exitoso
-            result = buildFinalResult(managersToInactiveAdvisors, batchJobId);
-            
-            logMessage('Procesamiento completado exitosamente');
+            // 3. Construir y enviar notificaciones
+            return buildAndSendNotifications(managersToInactiveAdvisors, emailTemplateName);
             
         } catch (Exception e) {
-            result = buildExceptionResult(e);
+            return buildExceptionResult(e);
+        }
+    }
+    
+    /**
+     * @description Obtiene asesores activos con validaciones
+     * @param advisorProfiles Set de perfiles de asesores
+     * @return List<User> Lista de asesores activos
+     */
+    private List<User> getActiveAdvisorsWithValidation(Set<String> advisorProfiles) {
+        Set<String> validProfiles = (advisorProfiles != null && !advisorProfiles.isEmpty()) 
+            ? advisorProfiles 
+            : DEFAULT_ADVISOR_PROFILES;
+            
+        List<User> activeAdvisors = userQueries.getActiveAdvisorsWithManagers(validProfiles);
+        logMessage('Asesores activos encontrados: ' + activeAdvisors.size());
+        
+        return activeAdvisors;
+    }
+    
+    /**
+     * @description Construye emails y los envía via batch
+     * @param managersToInactiveAdvisors Mapa de managers a asesores inactivos
+     * @param emailTemplateName Nombre del template de email
+     * @return ProcessResult Resultado del proceso
+     */
+    private ProcessResult buildAndSendNotifications(Map<Id, List<User>> managersToInactiveAdvisors, String emailTemplateName) {
+        // 3. Construir emails de notificación
+        List<Messaging.SingleEmailMessage> emails = buildNotificationEmails(managersToInactiveAdvisors, emailTemplateName);
+        
+        if (emails.isEmpty()) {
+            return buildErrorResult(new ProcessResult(), 'No se pudieron construir los emails de notificación');
         }
         
-        result.processingLog = new List<String>(this.processingLog);
-        return result;
+        // 4. Enviar emails via batch
+        String batchJobId = sendEmailsViaBatch(emails);
+        
+        // 5. Construir resultado exitoso
+        logMessage('=== PROCESAMIENTO COMPLETADO EXITOSAMENTE ===');
+        return buildFinalResult(managersToInactiveAdvisors, batchJobId);
     }
     
     /**
@@ -182,31 +189,16 @@ public class VEC_ProspectActivityEmailService {
         Map<Id, List<User>> managersToInactiveAdvisors = new Map<Id, List<User>>();
         
         try {
-            // Extraer IDs de asesores
-            Set<Id> advisorIds = new Set<Id>();
-            for (User advisor : activeAdvisors) {
-                advisorIds.add(advisor.Id);
-            }
-            
-            // Obtener asesores con actividad reciente usando VEC_LeadQueries
-            Date activityThreshold = Date.today().addDays(ACTIVITY_PERIOD_DAYS);
-            Set<Id> activeAdvisorIds = getAdvisorsWithRecentActivity(advisorIds, activityThreshold, leadRecordTypes);
+            Set<Id> advisorIds = extractAdvisorIds(activeAdvisors);
+            Set<Id> activeAdvisorIds = getAdvisorsWithRecentActivity(advisorIds, leadRecordTypes);
             
             logMessage('Asesores con actividad reciente: ' + activeAdvisorIds.size());
             
-            // Consolidar asesores sin actividad por manager
-            Integer totalInactiveAdvisors = 0;
-            for (User advisor : activeAdvisors) {
-                if (!activeAdvisorIds.contains(advisor.Id) && advisor.ManagerId != null) {
-                    if (!managersToInactiveAdvisors.containsKey(advisor.ManagerId)) {
-                        managersToInactiveAdvisors.put(advisor.ManagerId, new List<User>());
-                    }
-                    managersToInactiveAdvisors.get(advisor.ManagerId).add(advisor);
-                    totalInactiveAdvisors++;
-                    
-                    logMessage('Asesor sin actividad: ' + advisor.Name + ' (Manager: ' + advisor.Manager?.Name + ')');
-                }
-            }
+            Integer totalInactiveAdvisors = groupInactiveAdvisorsByManager(
+                activeAdvisors, 
+                activeAdvisorIds, 
+                managersToInactiveAdvisors
+            );
             
             logMessage('Total asesores sin actividad: ' + totalInactiveAdvisors);
             logMessage('Managers a notificar: ' + managersToInactiveAdvisors.size());
@@ -220,13 +212,72 @@ public class VEC_ProspectActivityEmailService {
     }
     
     /**
+     * @description Extrae IDs de asesores de la lista
+     * @param activeAdvisors Lista de asesores activos
+     * @return Set<Id> Set de IDs de asesores
+     */
+    private Set<Id> extractAdvisorIds(List<User> activeAdvisors) {
+        Set<Id> advisorIds = new Set<Id>();
+        for (User advisor : activeAdvisors) {
+            advisorIds.add(advisor.Id);
+        }
+        return advisorIds;
+    }
+    
+    /**
+     * @description Agrupa asesores sin actividad por manager
+     * @param activeAdvisors Lista de todos los asesores activos
+     * @param activeAdvisorIds IDs de asesores con actividad reciente
+     * @param managersToInactiveAdvisors Mapa para agrupar por manager
+     * @return Integer Número total de asesores sin actividad
+     */
+    private Integer groupInactiveAdvisorsByManager(
+        List<User> activeAdvisors, 
+        Set<Id> activeAdvisorIds, 
+        Map<Id, List<User>> managersToInactiveAdvisors
+    ) {
+        Integer totalInactiveAdvisors = 0;
+        
+        for (User advisor : activeAdvisors) {
+            if (isInactiveAdvisorWithManager(advisor, activeAdvisorIds)) {
+                addAdvisorToManagerGroup(advisor, managersToInactiveAdvisors);
+                totalInactiveAdvisors++;
+                logMessage('Asesor sin actividad: ' + advisor.Name + ' (Manager: ' + advisor.Manager?.Name + ')');
+            }
+        }
+        
+        return totalInactiveAdvisors;
+    }
+    
+    /**
+     * @description Verifica si un asesor está inactivo y tiene manager
+     * @param advisor Asesor a evaluar
+     * @param activeAdvisorIds IDs de asesores con actividad reciente
+     * @return Boolean true si está inactivo y tiene manager
+     */
+    private Boolean isInactiveAdvisorWithManager(User advisor, Set<Id> activeAdvisorIds) {
+        return !activeAdvisorIds.contains(advisor.Id) && advisor.ManagerId != null;
+    }
+    
+    /**
+     * @description Agrega asesor al grupo de su manager
+     * @param advisor Asesor a agregar
+     * @param managersToInactiveAdvisors Mapa de agrupación
+     */
+    private void addAdvisorToManagerGroup(User advisor, Map<Id, List<User>> managersToInactiveAdvisors) {
+        if (!managersToInactiveAdvisors.containsKey(advisor.ManagerId)) {
+            managersToInactiveAdvisors.put(advisor.ManagerId, new List<User>());
+        }
+        managersToInactiveAdvisors.get(advisor.ManagerId).add(advisor);
+    }
+    
+    /**
      * @description Obtiene asesores con actividad reciente de Leads
      * @param advisorIds Set de IDs de asesores
-     * @param activityThreshold Fecha límite de actividad
      * @param leadRecordTypes Set de RecordTypes de Lead a considerar para actividad
      * @return Set<Id> IDs de asesores con actividad reciente
      */
-    private Set<Id> getAdvisorsWithRecentActivity(Set<Id> advisorIds, Date activityThreshold, Set<String> leadRecordTypes) {
+    private Set<Id> getAdvisorsWithRecentActivity(Set<Id> advisorIds, Set<String> leadRecordTypes) {
         Set<Id> activeAdvisors = new Set<Id>();
         
         // Validaciones de parámetros (SonarCloud)
@@ -235,24 +286,12 @@ public class VEC_ProspectActivityEmailService {
             return activeAdvisors;
         }
         
-        if (activityThreshold == null) {
-            logMessage('WARN: activityThreshold es null, usando fecha por defecto');
-            activityThreshold = Date.today().addDays(ACTIVITY_PERIOD_DAYS);
-        }
-        
-        Set<String> validRecordTypes = (leadRecordTypes != null && !leadRecordTypes.isEmpty()) 
-            ? leadRecordTypes 
-            : DEFAULT_LEAD_RECORD_TYPES;
+        Date activityThreshold = Date.today().addDays(ACTIVITY_PERIOD_DAYS);
+        Set<String> validRecordTypes = getValidRecordTypes(leadRecordTypes);
         
         try {
             List<Lead> recentLeads = leadQueries.getManualLeadsByAdvisors(advisorIds, activityThreshold, validRecordTypes);
-            
-            // Filtrar solo Leads creados manualmente (CreatedById = OwnerId)
-            for (Lead lead : recentLeads) {
-                if (lead != null && lead.CreatedById == lead.OwnerId) {
-                    activeAdvisors.add(lead.CreatedById);
-                }
-            }
+            activeAdvisors = extractAdvisorsFromManualLeads(recentLeads);
             
         } catch (Exception e) {
             logMessage('Error consultando actividad de Leads: ' + e.getMessage());
@@ -260,6 +299,44 @@ public class VEC_ProspectActivityEmailService {
         }
         
         return activeAdvisors;
+    }
+    
+    /**
+     * @description Obtiene record types válidos, usando defaults si es necesario
+     * @param leadRecordTypes Set de record types proporcionados
+     * @return Set<String> Record types válidos a usar
+     */
+    private Set<String> getValidRecordTypes(Set<String> leadRecordTypes) {
+        return (leadRecordTypes != null && !leadRecordTypes.isEmpty()) 
+            ? leadRecordTypes 
+            : DEFAULT_LEAD_RECORD_TYPES;
+    }
+    
+    /**
+     * @description Extrae IDs de asesores de Leads creados manualmente
+     * @param recentLeads Lista de Leads recientes
+     * @return Set<Id> IDs de asesores con actividad manual
+     */
+    private Set<Id> extractAdvisorsFromManualLeads(List<Lead> recentLeads) {
+        Set<Id> activeAdvisors = new Set<Id>();
+        
+        // Filtrar solo Leads creados manualmente (CreatedById = OwnerId)
+        for (Lead lead : recentLeads) {
+            if (isManuallyCreatedLead(lead)) {
+                activeAdvisors.add(lead.CreatedById);
+            }
+        }
+        
+        return activeAdvisors;
+    }
+    
+    /**
+     * @description Verifica si un Lead fue creado manualmente
+     * @param lead Lead a verificar
+     * @return Boolean true si fue creado manualmente
+     */
+    private Boolean isManuallyCreatedLead(Lead lead) {
+        return lead != null && lead.CreatedById == lead.OwnerId;
     }
     
     /**
@@ -317,20 +394,37 @@ public class VEC_ProspectActivityEmailService {
         result.success = true;
         result.emailBatchJobId = batchJobId;
         result.managersNotified = managersToInactiveAdvisors.size();
+        result.advisorsWithoutActivity = calculateTotalInactiveAdvisors(managersToInactiveAdvisors);
+        result.message = buildSuccessMessage(result.managersNotified, result.advisorsWithoutActivity, batchJobId);
         
-        // Calcular total de asesores sin actividad
+        return result;
+    }
+    
+    /**
+     * @description Calcula el total de asesores sin actividad
+     * @param managersToInactiveAdvisors Mapa de managers a asesores inactivos
+     * @return Integer Total de asesores sin actividad
+     */
+    private Integer calculateTotalInactiveAdvisors(Map<Id, List<User>> managersToInactiveAdvisors) {
         Integer totalInactiveAdvisors = 0;
         for (List<User> advisors : managersToInactiveAdvisors.values()) {
             totalInactiveAdvisors += advisors.size();
         }
-        result.advisorsWithoutActivity = totalInactiveAdvisors;
-        
-        result.message = String.format(
+        return totalInactiveAdvisors;
+    }
+    
+    /**
+     * @description Construye mensaje de éxito con formato
+     * @param managersNotified Número de managers notificados
+     * @param advisorsWithoutActivity Número de asesores sin actividad
+     * @param batchJobId ID del job de batch
+     * @return String Mensaje formateado
+     */
+    private String buildSuccessMessage(Integer managersNotified, Integer advisorsWithoutActivity, String batchJobId) {
+        return String.format(
             'Procesamiento exitoso: {0} managers notificados sobre {1} asesores sin actividad. Batch Job ID: {2}',
-            new List<Object>{ result.managersNotified, result.advisorsWithoutActivity, batchJobId }
+            new List<Object>{ managersNotified, advisorsWithoutActivity, batchJobId }
         );
-        
-        return result;
     }
     
     /**
@@ -381,11 +475,19 @@ public class VEC_ProspectActivityEmailService {
      * @param message Mensaje a registrar
      */
     private void logMessage(String message) {
-        String timestamp = DateTime.now().format('yyyy-MM-dd HH:mm:ss');
-        String logEntry = '[' + timestamp + '] VEC_ProspectActivityEmailService: ' + message;
-        
+        String logEntry = buildLogEntry(message);
         this.processingLog.add(logEntry);
         System.debug(logEntry);
+    }
+    
+    /**
+     * @description Construye una entrada de log con timestamp
+     * @param message Mensaje base
+     * @return String Entrada de log formateada
+     */
+    private String buildLogEntry(String message) {
+        String timestamp = DateTime.now().format('yyyy-MM-dd HH:mm:ss');
+        return '[' + timestamp + '] VEC_ProspectActivityEmailService: ' + message;
     }
     
     /**
