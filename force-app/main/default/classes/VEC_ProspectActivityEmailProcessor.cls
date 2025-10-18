@@ -20,8 +20,9 @@
  */
 public class VEC_ProspectActivityEmailProcessor implements Queueable {
     
-    private static final Integer MAX_EMAILS_PER_TRANSACTION = 10;
-    private static final Integer MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024; // 25MB
+    // Variables de instancia para configuración (no static)
+    private final Integer maxEmailsPerTransaction;
+    private final Integer maxAttachmentSize;
     
     private Map<Id, List<User>> managersToAdvisorsMap;
     private List<Id> managerIdsToProcess;
@@ -41,6 +42,10 @@ public class VEC_ProspectActivityEmailProcessor implements Queueable {
     public VEC_ProspectActivityEmailProcessor() {
         this.currentIndex = 0;
         this.emailsSent = 0;
+        
+        // Inicializar configuración por defecto
+        this.maxEmailsPerTransaction = 10;
+        this.maxAttachmentSize = 25 * 1024 * 1024; // 25MB
         
         // Inicializar instancias de consultas especializadas
         this.emailTemplateQueries = new VEC_EmailTemplateQueries();
@@ -97,9 +102,9 @@ public class VEC_ProspectActivityEmailProcessor implements Queueable {
         List<Messaging.SingleEmailMessage> emailsToSend = new List<Messaging.SingleEmailMessage>();
         Integer emailsProcessed = 0;
         
-        // Enviar hasta MAX_EMAILS_PER_TRANSACTION emails
+        // Enviar hasta maxEmailsPerTransaction emails
         for (Messaging.SingleEmailMessage email : preBuiltEmails) {
-            if (emailsProcessed >= MAX_EMAILS_PER_TRANSACTION) {
+            if (emailsProcessed >= maxEmailsPerTransaction) {
                 break;
             }
             
@@ -135,8 +140,8 @@ public class VEC_ProspectActivityEmailProcessor implements Queueable {
         List<Messaging.SingleEmailMessage> emailsToSend = new List<Messaging.SingleEmailMessage>();
         Integer emailsInThisBatch = 0;
         
-        // Procesar hasta MAX_EMAILS_PER_TRANSACTION managers
-        while (currentIndex < managerIdsToProcess.size() && emailsInThisBatch < MAX_EMAILS_PER_TRANSACTION) {
+        // Procesar hasta maxEmailsPerTransaction managers
+        while (currentIndex < managerIdsToProcess.size() && emailsInThisBatch < maxEmailsPerTransaction) {
             Id managerId = managerIdsToProcess[currentIndex];
             List<User> inactiveAdvisors = managersToAdvisorsMap.get(managerId);
             

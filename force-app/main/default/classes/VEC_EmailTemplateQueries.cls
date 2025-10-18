@@ -1,7 +1,7 @@
 /**
  * @description Clase centralizada para consultas SOQL de EmailTemplate
  * @author Sistema
- * @version 1.0
+ * @version 1.1
  * @since 2025-10-17
  * 
  * Historial de Modificaciones:
@@ -10,6 +10,8 @@
  * =============================================================================
  * 1.0     | 2025-10-17 | Sistema | Creación inicial - Consultas específicas
  *         |            |         | para EmailTemplate del sistema VEC
+ * 1.1     | 2025-10-17 | Sistema | Sobrecarga método getProspectActivityEmailTemplate
+ *         |            |         | para aceptar emailTemplateDeveloperName por parámetro
  * =============================================================================
  */
 public class VEC_EmailTemplateQueries {
@@ -34,9 +36,10 @@ public class VEC_EmailTemplateQueries {
     
     /**
      * @description Obtiene el Email Template para notificaciones
+     * @param emailTemplateDeveloperName Nombre del developer del email template
      * @return EmailTemplate Template configurado o null si no existe
      */
-    public EmailTemplate getProspectActivityEmailTemplate() {
+    public EmailTemplate getProspectActivityEmailTemplate(String emailTemplateDeveloperName) {
         List<EmailTemplate> templates = [
             SELECT Id, Name, Subject, Body, HtmlValue
             FROM EmailTemplate 
@@ -45,6 +48,14 @@ public class VEC_EmailTemplateQueries {
         ];
         
         return templates.isEmpty() ? null : templates[0];
+    }
+    
+    /**
+     * @description Obtiene el Email Template para notificaciones usando valor por defecto
+     * @return EmailTemplate Template configurado o null si no existe
+     */
+    public EmailTemplate getProspectActivityEmailTemplate() {
+        return getProspectActivityEmailTemplate(this.emailTemplateDeveloperName);
     }
     
     /**
