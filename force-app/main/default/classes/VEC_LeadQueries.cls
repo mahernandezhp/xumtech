@@ -1,7 +1,7 @@
 /**
  * @description Clase centralizada para todas las consultas SOQL relacionadas con Leads
  * @author Sistema
- * @version 1.4
+ * @version 1.5
  * @since 2025-10-17
  * 
  * Historial de Modificaciones:
@@ -18,6 +18,8 @@
  *         |            |         | en parámetros con métodos legacy compatibles
  * 1.4     | 2025-10-17 | Sistema | Limpieza: Remoción de métodos no utilizados
  *         |            |         | por otras clases VEC_ para simplificar clase
+ * 1.5     | 2025-10-17 | Sistema | Validaciones: Agregadas validaciones de parámetros
+ *         |            |         | null/vacíos siguiendo recomendaciones SonarCloud
  * =============================================================================
  */
 public class VEC_LeadQueries {
@@ -30,6 +32,22 @@ public class VEC_LeadQueries {
      * @return List<Lead> Lista de Leads que cumplen criterios
      */
     public List<Lead> getManualLeadsByAdvisors(Set<Id> advisorIds, Date fromDate, Set<String> recordTypes) {
+        // Validaciones de parámetros (SonarCloud)
+        if (advisorIds == null || advisorIds.isEmpty()) {
+            System.debug(LoggingLevel.WARN, 'VEC_LeadQueries: advisorIds es null o vacío');
+            return new List<Lead>();
+        }
+        
+        if (fromDate == null) {
+            System.debug(LoggingLevel.WARN, 'VEC_LeadQueries: fromDate es null');
+            return new List<Lead>();
+        }
+        
+        if (recordTypes == null || recordTypes.isEmpty()) {
+            System.debug(LoggingLevel.WARN, 'VEC_LeadQueries: recordTypes es null o vacío');
+            return new List<Lead>();
+        }
+        
         return [
             SELECT CreatedById, OwnerId, RecordType.DeveloperName, IsConverted, Name, CreatedDate
             FROM Lead

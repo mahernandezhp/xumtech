@@ -1,7 +1,7 @@
 /**
  * @description Builder class para construir emails de notificación a managers sobre asesores sin actividad
  * @author Marco Hernandez
- * @version 1.4
+ * @version 1.5
  * @since 2025-10-17
  * 
  * Historial de Modificaciones:
@@ -18,6 +18,8 @@
  *         |            |                 | asesor eliminando query adicional de managers
  * 1.4     | 2025-10-17 | Marco Hernandez | Flexibilidad: emailTemplateName por parámetro
  *         |            |                 | en buildManagerNotificationEmails
+ * 1.5     | 2025-10-17 | Marco Hernandez | Validaciones: Agregadas validaciones de parámetros
+ *         |            |                 | null/vacíos siguiendo recomendaciones SonarCloud
  * =============================================================================
  */
 public class VEC_ProspectActivityEmailBuilder {
@@ -111,6 +113,7 @@ public class VEC_ProspectActivityEmailBuilder {
         Map<Id, List<User>> managersToAdvisorsMap,
         String emailTemplateName
     ) {
+        // Validaciones de parámetros (SonarCloud)
         if (managersToAdvisorsMap == null || managersToAdvisorsMap.isEmpty()) {
             System.debug('VEC_ProspectActivityEmailBuilder: No hay managers para notificar');
             return new List<Messaging.SingleEmailMessage>();
@@ -213,8 +216,12 @@ public class VEC_ProspectActivityEmailBuilder {
      * @return String Subject personalizado
      */
     private String buildEmailSubject(String templateSubject, Integer advisorCount) {
-        return templateSubject
-            .replace('{!advisorCount}', String.valueOf(advisorCount))
+        // Validaciones de parámetros (SonarCloud)
+        String subject = String.isNotBlank(templateSubject) ? templateSubject : 'Notificación de Actividad de Asesores';
+        Integer count = advisorCount != null ? advisorCount : 0;
+        
+        return subject
+            .replace('{!advisorCount}', String.valueOf(count))
             .replace('{!date}', Date.today().format());
     }
     
@@ -226,11 +233,15 @@ public class VEC_ProspectActivityEmailBuilder {
      * @return String Body personalizado
      */
     private String buildEmailBody(String templateBody, User manager, List<User> advisors) {
-        String advisorsList = buildAdvisorsListHtml(advisors);
+        // Validaciones de parámetros (SonarCloud)
+        String body = String.isNotBlank(templateBody) ? templateBody : 'Notificación de actividad de asesores.';
+        String managerName = (manager != null && String.isNotBlank(manager.Name)) ? manager.Name : 'Manager';
+        Integer advisorCount = (advisors != null) ? advisors.size() : 0;
+        String advisorsList = (advisors != null && !advisors.isEmpty()) ? buildAdvisorsListHtml(advisors) : '<p>No hay asesores sin actividad.</p>';
         
-        return templateBody
-            .replace('{!managerName}', manager.Name)
-            .replace('{!advisorCount}', String.valueOf(advisors.size()))
+        return body
+            .replace('{!managerName}', managerName)
+            .replace('{!advisorCount}', String.valueOf(advisorCount))
             .replace('{!advisorsList}', advisorsList)
             .replace('{!date}', Date.today().format())
             .replace('{!period}', '14 días');
@@ -242,13 +253,22 @@ public class VEC_ProspectActivityEmailBuilder {
      * @return String Lista HTML formateada
      */
     private String buildAdvisorsListHtml(List<User> advisors) {
+        // Validaciones de parámetros (SonarCloud)
+        if (advisors == null || advisors.isEmpty()) {
+            return '<p>No hay asesores sin actividad.</p>';
+        }
+        
         List<String> advisorItems = new List<String>();
         
         for (User advisor : advisors) {
-            advisorItems.add('<li>' + advisor.Name + ' (' + advisor.Email + ')</li>');
+            if (advisor != null) {
+                String advisorName = String.isNotBlank(advisor.Name) ? advisor.Name : 'Nombre no disponible';
+                String advisorEmail = String.isNotBlank(advisor.Email) ? advisor.Email : 'Email no disponible';
+                advisorItems.add('<li>' + advisorName + ' (' + advisorEmail + ')</li>');
+            }
         }
         
-        return '<ul>' + String.join(advisorItems, '') + '</ul>';
+        return advisorItems.isEmpty() ? '<p>No hay asesores válidos.</p>' : '<ul>' + String.join(advisorItems, '') + '</ul>';
     }
     
     /**

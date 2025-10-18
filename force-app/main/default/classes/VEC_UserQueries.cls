@@ -1,7 +1,7 @@
 /**
  * @description Clase centralizada para todas las consultas SOQL relacionadas con Users (Asesores y Managers)
  * @author Sistema
- * @version 1.3
+ * @version 1.4
  * @since 2025-10-17
  * 
  * Historial de Modificaciones:
@@ -16,6 +16,8 @@
  *         |            |         | en parámetros con métodos legacy compatibles
  * 1.3     | 2025-10-17 | Sistema | Simplificación: Solo filtro por perfil de asesor,
  *         |            |         | manager puede ser de cualquier perfil
+ * 1.4     | 2025-10-17 | Sistema | Validaciones: Agregadas validaciones de parámetros
+ *         |            |         | null/vacíos siguiendo recomendaciones SonarCloud
  * =============================================================================
  */
 public class VEC_UserQueries {
@@ -52,6 +54,12 @@ public class VEC_UserQueries {
      * @return List<User> Lista de asesores activos
      */
     public List<User> getActiveAdvisorsWithManagers(Set<String> advisorProfiles) {
+        // Validaciones de parámetros (SonarCloud)
+        if (advisorProfiles == null || advisorProfiles.isEmpty()) {
+            System.debug(LoggingLevel.WARN, 'VEC_UserQueries: advisorProfiles es null o vacío');
+            return new List<User>();
+        }
+        
         return [
             SELECT Id, Name, Email, ManagerId, Manager.Name, Manager.Email, Profile.Name
             FROM User 

@@ -2,7 +2,7 @@
  * @description Service class para orquestar el proceso completo de notificación por email
  *              a managers sobre asesores sin actividad de prospectos
  * @author Marco Hernandez
- * @version 1.3
+ * @version 1.4
  * @since 2025-10-17
  * 
  * Historial de Modificaciones:
@@ -17,6 +17,8 @@
  *         |            |                 | perfiles de usuarios como Set<String>
  * 1.3     | 2025-10-17 | Marco Hernandez | Simplificación: Solo filtro por perfil de asesor,
  *         |            |                 | manager puede ser de cualquier perfil
+ * 1.4     | 2025-10-17 | Marco Hernandez | Validaciones: Agregadas validaciones de parámetros
+ *         |            |                 | null/vacíos siguiendo recomendaciones SonarCloud
  * =============================================================================
  */
 public class VEC_ProspectActivityEmailService {
@@ -57,9 +59,10 @@ public class VEC_ProspectActivityEmailService {
         VEC_LeadQueries leadQueries, 
         VEC_ProspectActivityEmailBuilder emailBuilder
     ) {
-        this.userQueries = userQueries;
-        this.leadQueries = leadQueries;
-        this.emailBuilder = emailBuilder;
+        // Validaciones de parámetros (SonarCloud)
+        this.userQueries = userQueries != null ? userQueries : new VEC_UserQueries();
+        this.leadQueries = leadQueries != null ? leadQueries : new VEC_LeadQueries();
+        this.emailBuilder = emailBuilder != null ? emailBuilder : new VEC_ProspectActivityEmailBuilder();
         this.processingLog = new List<String>();
     }
     
@@ -90,7 +93,7 @@ public class VEC_ProspectActivityEmailService {
     public ProcessResult processInactiveAdvisorsAndSendEmails() {
         return processInactiveAdvisorsAndSendEmails(DEFAULT_EMAIL_TEMPLATE_NAME, DEFAULT_LEAD_RECORD_TYPES, DEFAULT_ADVISOR_PROFILES);
     }
-    
+
     /**
      * @description Método principal para procesar asesores inactivos y enviar notificaciones
      * @param emailTemplateName Nombre del developer del email template a usar
@@ -148,8 +151,13 @@ public class VEC_ProspectActivityEmailService {
      * @return List<User> Lista de asesores activos
      */
     private List<User> getActiveAdvisors(Set<String> advisorProfiles) {
+        // Validaciones de parámetros (SonarCloud)
+        Set<String> validProfiles = (advisorProfiles != null && !advisorProfiles.isEmpty()) 
+            ? advisorProfiles 
+            : DEFAULT_ADVISOR_PROFILES;
+            
         try {
-            return userQueries.getActiveAdvisorsWithManagers(advisorProfiles);
+            return userQueries.getActiveAdvisorsWithManagers(validProfiles);
         } catch (Exception e) {
             logMessage('Error obteniendo asesores activos: ' + e.getMessage());
             throw new ProspectActivityEmailServiceException('Error al consultar asesores activos: ' + e.getMessage(), e);
@@ -221,12 +229,27 @@ public class VEC_ProspectActivityEmailService {
     private Set<Id> getAdvisorsWithRecentActivity(Set<Id> advisorIds, Date activityThreshold, Set<String> leadRecordTypes) {
         Set<Id> activeAdvisors = new Set<Id>();
         
+        // Validaciones de parámetros (SonarCloud)
+        if (advisorIds == null || advisorIds.isEmpty()) {
+            logMessage('WARN: advisorIds es null o vacío');
+            return activeAdvisors;
+        }
+        
+        if (activityThreshold == null) {
+            logMessage('WARN: activityThreshold es null, usando fecha por defecto');
+            activityThreshold = Date.today().addDays(ACTIVITY_PERIOD_DAYS);
+        }
+        
+        Set<String> validRecordTypes = (leadRecordTypes != null && !leadRecordTypes.isEmpty()) 
+            ? leadRecordTypes 
+            : DEFAULT_LEAD_RECORD_TYPES;
+        
         try {
-            List<Lead> recentLeads = leadQueries.getManualLeadsByAdvisors(advisorIds, activityThreshold, leadRecordTypes);
+            List<Lead> recentLeads = leadQueries.getManualLeadsByAdvisors(advisorIds, activityThreshold, validRecordTypes);
             
             // Filtrar solo Leads creados manualmente (CreatedById = OwnerId)
             for (Lead lead : recentLeads) {
-                if (lead.CreatedById == lead.OwnerId) {
+                if (lead != null && lead.CreatedById == lead.OwnerId) {
                     activeAdvisors.add(lead.CreatedById);
                 }
             }
