@@ -22,11 +22,11 @@
 public class VEC_ProspectActivityEmailService {
     
     // Constantes para configuración
-    private static final Integer ACTIVITY_PERIOD_DAYS = -14;
-    private static final Integer EMAIL_BATCH_SIZE = 10; // Límite de Salesforce para envío
-    private static final String DEFAULT_EMAIL_TEMPLATE_NAME = 'VEC_Manager_Prospect_Activity_Alert';
-    private static final Set<String> DEFAULT_LEAD_RECORD_TYPES = new Set<String>{ 'Empresas_U4O' };
-    private static final Set<String> DEFAULT_ADVISOR_PROFILES = new Set<String>{ 'VEC Asesor U4O' };
+    private final Integer ACTIVITY_PERIOD_DAYS = -14;
+    private final Integer EMAIL_BATCH_SIZE = 10; // Límite de Salesforce para envío
+    private final String DEFAULT_EMAIL_TEMPLATE_NAME = 'VEC_Manager_Prospect_Activity_Alert';
+    private final Set<String> DEFAULT_LEAD_RECORD_TYPES = new Set<String>{ 'Empresas_U4O' };
+    private final Set<String> DEFAULT_ADVISOR_PROFILES = new Set<String>{ 'VEC Asesor U4O' };
     
     // Instancias de clases de consulta y construcción
     private final VEC_UserQueries userQueries;
